@@ -1,0 +1,793 @@
+<meta charset="utf-8">
+<title>Gawler Place Picker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.15.2/mqtt.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;700&display=swap">
+<style>
+:root{
+  --ground:#EEF1EE; --surface:#FFFFFF; --surface2:#F5F7F4; --raise:#FAFBF9;
+  --line:#D3D9D3; --line2:#B8C1B9;
+  --ink:#14201A; --muted:#5C6B62; --faint:#86948B;
+  --accent:#C2410C; --accent-ink:#FFFFFF; --accent-soft:#FBE9E0;
+  --ok:#17703B; --ok-bg:#DDF2E3; --ok-line:#9ED4B2;
+  --over:#1D4ED8; --over-bg:#DCE6FB; --over-line:#A5BCF2;
+  --miss:#B42318; --miss-bg:#FBE1DD; --miss-line:#F0ADA5;
+  --warn:#B45309; --warn-bg:#FDEBD0; --warn-line:#F2C98A;
+  --shadow:0 1px 0 rgba(20,32,26,.05), 0 2px 8px rgba(20,32,26,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#121815; --surface:#1B221E; --surface2:#232C27; --raise:#28332D;
+    --line:#33403A; --line2:#47554E;
+    --ink:#EDF2EE; --muted:#A3B0A8; --faint:#7C8A82;
+    --accent:#F97316; --accent-ink:#14201A; --accent-soft:#3A2314;
+    --ok:#5BD28A; --ok-bg:#143A24; --ok-line:#256B40;
+    --over:#8FB4FF; --over-bg:#14305E; --over-line:#2A5090;
+    --miss:#F58C82; --miss-bg:#4A1B16; --miss-line:#7E3A31;
+    --warn:#F5B454; --warn-bg:#4A3210; --warn-line:#7A5620;
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#121815; --surface:#1B221E; --surface2:#232C27; --raise:#28332D;
+  --line:#33403A; --line2:#47554E;
+  --ink:#EDF2EE; --muted:#A3B0A8; --faint:#7C8A82;
+  --accent:#F97316; --accent-ink:#14201A; --accent-soft:#3A2314;
+  --ok:#5BD28A; --ok-bg:#143A24; --ok-line:#256B40;
+  --over:#8FB4FF; --over-bg:#14305E; --over-line:#2A5090;
+  --miss:#F58C82; --miss-bg:#4A1B16; --miss-line:#7E3A31;
+  --warn:#F5B454; --warn-bg:#4A3210; --warn-line:#7A5620;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.4}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:3px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.cond{font-family:"IBM Plex Sans Condensed","Arial Narrow",sans-serif}
+.eyebrow{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.12em;font-size:12px;color:var(--muted)}
+.wrap{max-width:680px;margin:0 auto;padding:0 12px 130px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* header */
+header{position:sticky;top:0;z-index:30;background:var(--ground);border-bottom:1px solid var(--line)}
+.head-in{max-width:680px;margin:0 auto;padding:8px 12px 0}
+.title-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h1{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:26px;line-height:1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.1;margin:18px 0 6px;text-wrap:balance}
+h3{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:16px;margin:14px 0 4px}
+.route{font-size:12.5px;color:var(--muted);margin:3px 0 0}
+.route b{font-weight:600;color:var(--ink)}
+.bar{margin:8px 0 0;height:9px;background:var(--surface2);border:1px solid var(--line);border-radius:2px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%;background:var(--ok);transition:width .18s ease}
+.bar i.o{background:var(--over)}
+.counts{display:flex;justify-content:space-between;gap:8px;margin:6px 0 0;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.counts b{color:var(--ink);font-weight:600}
+.tabs{display:flex;gap:2px;margin:8px 0 0}
+.tabs button{flex:1;padding:8px 2px 7px;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:13px;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--muted);background:var(--surface)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--faint);display:inline-block}
+.pill.live{color:var(--ok);border-color:var(--ok-line)} .pill.live i{background:var(--ok)}
+.pill.local{color:var(--warn);border-color:var(--warn-line)} .pill.local i{background:var(--warn)}
+
+/* search */
+.search{display:flex;gap:6px;margin:10px 0 0}
+.search input{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--line2);border-radius:3px;background:var(--surface);font-size:15px}
+.search button{padding:0 12px;border:1px solid var(--line2);border-radius:3px;background:var(--surface);font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:12.5px}
+
+/* groups */
+.group{margin:14px 0 0}
+.ghead{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;background:var(--surface2);border:1px solid var(--line);border-radius:3px;position:sticky;top:var(--stick,0);z-index:10}
+.ghead .gname{flex:1;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:15.5px;line-height:1.1}
+.ghead .gcount{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}
+.ghead .gcount.done{color:var(--ok)}
+.chev{width:11px;height:11px;border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);transform:rotate(45deg);transition:transform .15s ease;margin:-4px 2px 0 0;flex:none}
+.group.closed .chev{transform:rotate(-45deg)}
+.gnote{font-size:12.5px;color:var(--muted);padding:6px 10px 0}
+.group.closed .glist,.group.closed .gnote{display:none}
+.glist{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+
+/* item */
+.item{background:var(--surface);border:1px solid var(--line);border-radius:3px;box-shadow:var(--shadow);overflow:hidden;border-left:5px solid var(--line2)}
+.item.full{border-left-color:var(--ok);background:var(--ok-bg)}
+.item.over{border-left-color:var(--over);background:var(--over-bg)}
+.item.short{border-left-color:var(--over);background:var(--surface)}
+.item.miss{border-left-color:var(--miss);background:var(--miss-bg)}
+.item.skip{border-left-color:var(--line2);background:var(--surface2);opacity:.7}
+.item.cur{outline:2px solid var(--accent);outline-offset:-2px}
+.row{display:flex;align-items:stretch}
+.main{flex:1;text-align:left;padding:9px 10px;min-width:0}
+.desc{font-weight:600;font-size:15.5px;line-height:1.25;overflow-wrap:anywhere}
+.sub{display:flex;align-items:center;gap:8px;margin-top:3px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.sub .plu{font-size:12.5px;font-weight:700;color:var(--ink)}
+.state{font-weight:600}
+.state.full{color:var(--ok)} .state.over{color:var(--over)} .state.short{color:var(--over)} .state.miss{color:var(--miss)} .state.skip{color:var(--muted)}
+.tick{flex:none;width:56px;display:flex;align-items:center;justify-content:center;border-left:1px solid var(--line);font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:22px;color:var(--faint);background:var(--raise)}
+.tick .box{width:24px;height:24px;border:2px dashed var(--line2);border-radius:3px}
+.item.full .tick,.item.over .tick,.item.miss .tick,.item.short .tick,.item.skip .tick{background:transparent}
+.item.full .tick{color:var(--ok)} .item.over .tick{color:var(--over)} .item.miss .tick{color:var(--miss)} .item.skip .tick{color:var(--muted)}
+.qtag{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;padding:0 6px;margin-right:7px;border-radius:2px;background:var(--ink);color:var(--ground);font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:12.5px;vertical-align:1px}
+.qtag.many{background:var(--accent);color:var(--accent-ink)}
+.chips{display:flex;gap:6px;padding:0 8px 8px 10px;flex-wrap:wrap}
+.chip{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.07em;font-size:12px;padding:5px 9px;border:1px solid var(--line2);border-radius:2px;color:var(--muted);background:var(--surface)}
+.chip.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.chip.danger.on{background:var(--miss);border-color:var(--miss);color:#fff}
+.chip.warn.on{background:var(--warn);border-color:var(--warn);color:#fff}
+.flag{margin:0 8px 8px 10px;padding:6px 8px;border-left:3px solid var(--warn);background:var(--surface2);font-size:12.5px;color:var(--muted)}
+.notebox{margin:0 8px 8px 10px}
+.notebox textarea{width:100%;font-size:14px;padding:7px 8px;border:1px solid var(--line2);border-radius:2px;background:var(--surface);color:var(--ink);resize:vertical;min-height:50px}
+.noteshow{margin:0 8px 8px 10px;font-size:13px;color:var(--ink);border-left:3px solid var(--line2);padding:2px 8px;white-space:pre-wrap}
+.qty{margin:0 8px 8px 10px;padding:8px;background:var(--surface2);border:1px solid var(--line);border-radius:2px}
+.qty-main{display:flex;align-items:center;gap:8px}
+.qty-main button.step{width:46px;height:46px;border:1px solid var(--line2);background:var(--surface);border-radius:2px;font-size:24px;font-weight:600;line-height:1}
+.qty-main input{flex:1;min-width:0;text-align:center;font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:22px;height:46px;border:1px solid var(--line2);border-radius:2px;background:var(--surface);color:var(--ink)}
+.presets{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+.presets button{flex:1;min-width:60px;padding:7px 6px;border:1px solid var(--line2);background:var(--surface);border-radius:2px;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+.presets button.key{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.where{margin:0 8px 8px 10px;padding:8px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:2px}
+.where p{margin:0 0 6px;font-size:13px;color:var(--ink)}
+.secgrid{display:flex;flex-wrap:wrap;gap:5px}
+.secgrid button{padding:6px 9px;border:1px solid var(--line2);background:var(--surface);border-radius:2px;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em}
+.secgrid button.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+
+/* panels */
+.panel{display:none} .panel.on{display:block}
+.lede{font-size:14px;color:var(--muted);margin:12px 0 0;max-width:62ch}
+.empty{padding:26px 12px;text-align:center;color:var(--muted);font-size:15px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:12px;margin-top:12px}
+.card.warn{border-color:var(--warn-line);background:var(--warn-bg)}
+.card.bad{border-color:var(--miss-line);background:var(--miss-bg)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;border:1px solid var(--line2);background:var(--surface);border-radius:2px;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:13.5px;white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.sm{padding:6px 10px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:default}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+textarea.big{width:100%;min-height:150px;padding:8px;border:1px solid var(--line2);border-radius:2px;background:var(--surface);color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:12px;resize:vertical}
+.drop{margin-top:10px;border:2px dashed var(--line2);border-radius:3px;padding:14px;text-align:center;color:var(--muted);font-size:14px;background:var(--surface2)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop input{display:none}
+.tlist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.trow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:3px;box-shadow:var(--shadow)}
+.trow.active{border-color:var(--accent);border-left:5px solid var(--accent)}
+.trow .tn{flex:1;min-width:0}
+.trow .tt{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:18px;line-height:1.1}
+.trow .ts{font-size:12.5px;color:var(--muted);margin-top:2px}
+.trow .tp{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:15px;text-align:right;white-space:nowrap}
+.trow .tp small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400;font-size:11.5px;color:var(--muted)}
+.trow .tp.done{color:var(--ok)}
+.entry{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.erow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-top:1px solid var(--line);text-align:left;width:100%}
+.erow:first-child{border-top:0}
+.erow .en{flex:1;font-size:14.5px;line-height:1.25;overflow-wrap:anywhere}
+.erow .ep{font-size:12.5px;color:var(--muted);font-weight:700}
+.erow .eq{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:16px;min-width:34px;text-align:right}
+.erow .eb{width:24px;height:24px;border:2px solid var(--line2);border-radius:2px;flex:none;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:transparent}
+.erow.done{background:var(--ok-bg)} .erow.done .eb{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.erow.zero .eq{color:var(--miss)}
+.erow.untouched .eq{color:var(--faint)}
+table.prev{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
+table.prev td{padding:4px 6px;border-top:1px solid var(--line)}
+table.prev td:last-child{text-align:right;font-family:"IBM Plex Mono",monospace}
+.tscroll{overflow-x:auto}
+.orow{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:3px;margin-top:6px}
+.orow .on{flex:1;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:15px}
+.orow .oh{font-size:12px;color:var(--muted);display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400}
+.orow button{width:36px;height:36px;border:1px solid var(--line2);border-radius:2px;background:var(--surface2);font-size:18px}
+.prow{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--line);font-size:13.5px}
+.prow:first-child{border-top:0}
+.prow .pd{flex:1;min-width:0;overflow-wrap:anywhere}
+.kbd{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:1px 5px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;background:var(--surface2)}
+
+footer{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--ground);border-top:1px solid var(--line);padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
+.foot-in{max-width:680px;margin:0 auto;display:flex;gap:8px}
+.foot-in button{flex:1;padding:11px 6px;border:1px solid var(--line2);background:var(--surface);border-radius:2px;font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:13.5px;white-space:nowrap}
+.foot-in button.pri{flex:1.4;background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--ground);padding:9px 14px;border-radius:3px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:50;max-width:92vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.fatal{background:var(--miss-bg);border:1px solid var(--miss);border-left:4px solid var(--miss);border-radius:3px;padding:12px;margin-top:16px;font-size:14px}
+.fatal pre{white-space:pre-wrap;overflow-wrap:anywhere;font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--surface);padding:8px;border-radius:2px;margin:6px 0 0}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(10,16,12,.75);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal[hidden]{display:none}
+.modal-card{background:var(--surface);border-radius:4px;padding:14px;max-width:min(94vw,520px);width:100%;border:1px solid var(--line);max-height:88vh;overflow:auto}
+.modal-card textarea{width:100%;font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:6px;border:1px solid var(--line2);border-radius:2px;background:var(--surface2);color:var(--ink);resize:vertical;min-height:120px}
+</style>
+
+<header>
+  <div class="head-in">
+    <div class="title-row">
+      <h1 id="hTitle">Gawler Place Picker</h1>
+      <span class="pill" id="syncPill"><i></i><span>Connecting</span></span>
+    </div>
+    <p class="route" id="hRoute">Internal transfers, Adelaide Storeroom to the shop floor.</p>
+    <div id="peers" style="margin-top:2px"></div>
+    <div id="hProg" hidden>
+      <div class="bar"><i id="barFull" style="width:0"></i><i id="barOver" class="o" style="width:0"></i></div>
+      <div class="counts">
+        <span><b id="cUnits">0</b> / <span id="cUnitsT">0</span> units</span>
+        <span><b id="cLines">0</b> / <span id="cLinesT">0</span> lines settled</span>
+        <span id="cMiss"></span>
+      </div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="pick">Pick</button>
+      <button role="tab" aria-selected="false" data-tab="miss">Misses</button>
+      <button role="tab" aria-selected="false" data-tab="entry">Entry</button>
+      <button role="tab" aria-selected="false" data-tab="list">Transfers</button>
+      <button role="tab" aria-selected="false" data-tab="layout">Layout</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="panel on" id="p-pick"></div>
+  <div class="panel" id="p-miss"></div>
+  <div class="panel" id="p-entry"></div>
+  <div class="panel" id="p-list"></div>
+  <div class="panel" id="p-layout"></div>
+  <div id="fatal"></div>
+</div>
+
+<footer>
+  <div class="foot-in">
+    <button class="pri" id="btnCopy">Copy summary</button>
+    <button id="btnCollapse">Collapse</button>
+    <button id="btnReset">Reset</button>
+  </div>
+</footer>
+<div class="toast" id="toast"></div>
+<div class="modal" id="modal" hidden><div class="modal-card" id="modalBody"></div></div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- fatal box ---------- */
+window.addEventListener('error',function(e){var f=document.getElementById('fatal');if(f)f.innerHTML='<div class="fatal"><b>Something broke on this page.</b> Copy this and paste it to Claude:<pre>'+esc(String(e.message||e))+'\n'+esc(String((e.error&&e.error.stack)||''))+'</pre></div>';});
+
+/* ---------- store layout ---------- */
+var SECTIONS=[
+ {key:'tcg',   name:'TCG shelf & counter cabinet', short:'TCG',     hint:'Shelf 8 front and the counter cabinet. Boosters, sleeves, 18 ml Vallejo and AK markers. Do it first while the shop is quiet and you still have a key.'},
+ {key:'cards', name:'Card games',                  short:'Cards',   hint:'Shelf 4 left. Overflow on shelf 3 right.'},
+ {key:'party', name:'Party & adult games',         short:'Party',   hint:'On top of the card-game shelf, or shelf 3.'},
+ {key:'rpg',   name:'RPG gear',                    short:'RPG',     hint:'Shelf 4 right. Loose dice in the desk trays. Overflow in bulk.'},
+ {key:'family',name:'Family games & classics',     short:'Family',  hint:'Shelf 5 left. Monopoly, Cluedo, Trivial Pursuit and the Gamelands on top.'},
+ {key:'puzzles',name:'Wooden & IQ puzzles, cubes', short:'Puzzles', hint:'Shelf 5 right.'},
+ {key:'squish',name:'Squishies, Smooshos & putty', short:'Squish',  hint:'Shelf 6. Flingers on top, spinners at the bottom. Usually the biggest block: grab a tub.'},
+ {key:'fidget',name:'Fidgets & keychains',         short:'Fidget',  hint:'Bottom of shelf 6 and the counter. Speks, clickers, Micro Fidgetz, Tangle.'},
+ {key:'white', name:'White shelf (misc)',          short:'White',   hint:'Shelf 7. World’s Smallest, playing cards, fake eggs, novelty.'},
+ {key:'kits',  name:'Wooden kits',                 short:'Kits',    hint:'Shelf 8 back, with the wooden guns. Rolife, ROKR, Robotime, Wood Bloom.'},
+ {key:'nano',  name:'Nanoblock & EUGY',            short:'Nano',    hint:'Under the folding table, right side.'},
+ {key:'boxed', name:'Boxed games',                 short:'Boxed',   hint:'Shelves 1–3, big to small. Onto the trolley, heaviest at the bottom.'},
+ {key:'chess', name:'Premium chess & mahjong',     short:'Chess',   hint:'Shelf 9.'},
+ {key:'bulk',  name:'Bulk (back)',                 short:'Bulk',    hint:'Jigsaws, Huzzles, puzzle mats and holders, shuffler, cheap chess, RPG overflow, aerosols. Last stop so nothing gets crushed.'}
+];
+var SEC={}; SECTIONS.forEach(function(s){SEC[s.key]=s;});
+/* placements settled in past transfers (Will's corrections) */
+var BAKED={
+ '174241':'boxed','173309':'boxed','176253':'fidget','174232':'bulk','171532':'cards',
+ '141733':'tcg','141741':'tcg','125355':'bulk','124715':'cards','129200':'chess'
+};
+var RULES=[
+ [/nanoblock|nano ?block|mininano|\beugy/i,'nano'],
+ [/robotime|rolife|\brokr\b|wood bloom|book nook|diy .*(kit|house|shop)|3d wooden|wooden gun/i,'kits'],
+ [/booster|magic the gathering|\bmtg\b|pokemon|pokémon|lorcana|one piece|riftbound|match attax|footy stars|topps|commander deck|flesh and blood|sleeves|gamegenic|vallejo.*18 ?ml|18 ?ml.*vallejo|game colou?r|ak interactive|playmarker|mega evolutions|starter deck|\btcg\b|\btc g\b/i,'tcg'],
+ [/aerosol|400 ?ml|jigsaw|\b\d{3,4} ?pc\b|puzzle mat|puzzle holder|huzzle|cast puzzle|shuffler|vizzles|roll ?up/i,'bulk'],
+ [/smoosho|squish|super sqz|super squeeze|\bgid\b|glow in the dark|putty|needoh|nee ?doh|pullie|stretch|flinger|plush|sticky|squeeze|dumpling|jelly|soft rise|slime|mochi|glitter/i,'squish'],
+ [/fidget|\bspeks?\b|spek-|clicker|spin cube|spinner|tangle|keychain|keyring|stress relief|pop ?it|infinity cube|magnet/i,'fidget'],
+ [/worlds? smallest|playing cards|fake egg|cap gun|cap bomb|hair chalk|finger puppet|yo ?yo|harmonica|bottle opener|keycraft|blind bag|pen lab|clementoni|\bmdi\b|novelty|prank|whoopee/i,'white'],
+ [/d&d|dungeons|\brpg\b|rulebook|core book|handbook|dungeon master|arkham|\blcg\b|miniature|\bminis?\b|\bdice\b|\bd20\b|cosmere|pathfinder|warhammer|monster manual|player'?s guide/i,'rpg'],
+ [/gameland/i,'family'],
+ [/chess|mahjong|backgammon|\bgo set\b/i,'chess'],
+ [/\bgan \d|speedcube|rubik|\bcube\b|iq mini|iq puzzle|katamino|crystal puzzle|3d puzzle|brainteaser|smart games|wooden puzzle|kanoodle/i,'puzzles'],
+ [/monopoly(?! deal)|cluedo|trivial pursuit|scrabble|guess who|labyrinth|telestrations|pass the pugs|jenga|5 second rule|blank slate|pictionary|game of life|battleship|connect 4|twister|yahtzee|operation|kerplunk|articulate/i,'family'],
+ [/party|you can'?t say|poorly explained|that sound game|cards against|what do you meme|codenames|just one|wavelength|hues (&|and) cues|herd mentality|tapple|monkey around|drunk|adult|stupid deaths|exploding kittens|throw throw|5 minute|drinking|nsfw|psycho killer|nightmare st/i,'party'],
+ [/card game|hangsell|\bcoup\b|quiddler|tenzi|flip 7|\buno\b|monopoly deal|skip-?bo|phase 10|bananagrams|rummy|the game\b|the crew|saboteur|taco cat|regicide|dutch blitz|cockroach|\bgreed\b|moose master|twisted cryptids|sushi go|love letter|dobble|spot it|\btin\b|bento|snakes of wrath|forgenesis|dutch|\bset\b.*card|\bcards\b/i,'cards']
+];
+function classify(plu,desc,learned){
+  if(learned&&learned[plu]&&SEC[learned[plu]])return learned[plu];
+  if(BAKED[plu])return BAKED[plu];
+  for(var i=0;i<RULES.length;i++){if(RULES[i][0].test(desc))return RULES[i][1];}
+  return 'boxed';
+}
+
+/* ---------- helpers ---------- */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function $(id){return document.getElementById(id);}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove('on');},1800);}
+function copyText(txt){
+  var done=function(){toast('Copied');};
+  var fb=function(){try{var ta=document.createElement('textarea');ta.value=txt;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();var ok=document.execCommand('copy');document.body.removeChild(ta);ok?done():showText('Copy failed. Select and copy by hand:',txt);}catch(e){showText('Copy failed. Select and copy by hand:',txt);}};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,fb);}else fb();
+}
+function showText(label,txt){openModal('<p style="margin:0 0 6px;font-weight:600">'+esc(label)+'</p><textarea readonly>'+esc(txt)+'</textarea><div class="btnrow"><button class="btn" data-close>Close</button></div>');}
+function openModal(html){$('modalBody').innerHTML=html;$('modal').hidden=false;}
+function closeModal(){$('modal').hidden=true;}
+$('modal').addEventListener('click',function(e){if(e.target===$('modal')||e.target.hasAttribute('data-close'))closeModal();});
+function fmtDate(d){if(!d)return '';var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(d);if(m){var dt=new Date(+m[3],+m[2]-1,+m[1]);return dt.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',year:'numeric'});}return d;}
+function todayAU(){var d=new Date();return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();}
+function debounce(fn,ms){var t;return function(){clearTimeout(t);var a=arguments,s=this;t=setTimeout(function(){fn.apply(s,a);},ms);};}
+var DEV=(function(){try{var d=localStorage.getItem('gwp:dev');if(!d){d=Math.random().toString(36).slice(2,8);localStorage.setItem('gwp:dev',d);}return d;}catch(e){return 'x';}})();
+
+/* ---------- storage adapter: MQTT retained topics on broker.emqx.io ----------
+   Every document is a retained message under a secret prefix. Picks are stored as one shard per
+   DEVICE per transfer (picks/<order>/<device>): each device only ever writes its own shard and every
+   reader merges the shards, newest timestamp per line winning, so the phone and this page can pick
+   at once without clobbering each other. The public broker drops messages under load, so every
+   publish is re-sent until the broker echoes it back, and the subscription is renewed every minute. */
+var PREFIX='gp-7c3e91a4d0b25f68e1c7a93b';
+var BROKER='wss://broker.emqx.io:8084/mqtt';
+var store={live:false,cache:{},shards:{},subs:{},csubs:{},client:null,ready:false,peers:{},fireT:{},own:{},pubT:{}};
+store.pub=function(rel,obj){var t=PREFIX+'/'+rel,s=obj==null?'':JSON.stringify(obj);store.own[t]=s;store.send(t,s);return Promise.resolve();};
+store.send=function(t,s){if(!store.client)return;store.client.publish(t,s,{qos:0,retain:true},function(e){if(e)console.warn('publish',e);});};
+setInterval(function(){if(!store.live)return;Object.keys(store.own).forEach(function(t){if(t.indexOf('/presence/')<0)store.send(t,store.own[t]);});},5000);
+setInterval(function(){if(store.live&&store.client)store.client.subscribe(PREFIX+'/#',{qos:0});},60000);
+store.fire=function(p){clearTimeout(store.fireT[p]);store.fireT[p]=setTimeout(function(){(store.subs[p]||[]).forEach(function(fn){fn(store.cache[p]||null,{hasPendingWrites:false});});},60);};
+store.col=function(col){return Object.keys(store.cache).filter(function(k){return k.indexOf(col+'/')===0;}).map(function(k){return {id:k.slice(col.length+1),data:store.cache[k]};});};
+store.fireCol=function(col){clearTimeout(store.fireT['col:'+col]);store.fireT['col:'+col]=setTimeout(function(){(store.csubs[col]||[]).forEach(function(fn){fn(store.col(col));});},80);};
+/* merge every device's shard for an order into the progress doc the rest of the page reads */
+store.rebuild=function(id,remote){var best={},shs=store.shards[id]||{};Object.keys(shs).forEach(function(dev){var st=(shs[dev]&&shs[dev].state)||{};Object.keys(st).forEach(function(plu){var e=st[plu]||{};if(best[plu]&&(best[plu].t||0)>=(e.t||0))return;best[plu]=e;});});
+  var state={};Object.keys(best).forEach(function(plu){var e=normEntry(best[plu]);if(e.p||e.f||e.n||e.w||e.s)state[plu]=cleanEntry(e);});
+  var p='progress/'+id,prev=store.cache[p];var doc={order:id,updated:Date.now(),by:remote?'remote':DEV,state:state};
+  if(prev&&JSON.stringify(prev.state)===JSON.stringify(state))return;store.cache[p]=doc;store.fire(p);store.fireCol('progress');};
+store.myShard=function(id){var shs=store.shards[id]=store.shards[id]||{};return shs[DEV]=shs[DEV]||{by:DEV,at:0,state:{}};};
+store.writeEntries=function(id,entries){var sh=store.myShard(id),now=Date.now();Object.keys(entries).forEach(function(plu){var e=normEntry(entries[plu]);e.t=now;sh.state[plu]=e;});sh.at=now;store.rebuild(id,false);
+  clearTimeout(store.pubT[id]);store.pubT[id]=setTimeout(function(){store.pub('picks/'+id+'/'+DEV,sh);store.presence();},150);};
+store.ingest=function(t,s){
+  if(t.indexOf(PREFIX+'/')!==0)return;
+  if(store.own[t]===s){delete store.own[t];return;}   // our own publish echoed back: acknowledged
+  if(store.own[t]!=null)return;                        // our newer value is still on its way
+  var rel=t.slice(PREFIX.length+1).split('/'),kind=rel[0],id=rel[1];
+  var obj=null;if(s){try{obj=JSON.parse(s);}catch(e){obj=null;}}
+  if(kind==='transfers'&&id){var p='transfers/'+id;if(obj&&Array.isArray(obj.entered)){var m={};obj.entered.forEach(function(x){m[x]=1;});obj.entered=m;}
+    if(JSON.stringify(store.cache[p]||null)===JSON.stringify(obj))return;if(obj)store.cache[p]=obj;else{delete store.cache[p];delete store.cache['progress/'+id];delete store.shards[id];}store.fire(p);store.fireCol('transfers');return;}
+  if(kind==='settings'&&id){var p2='settings/'+id;if(JSON.stringify(store.cache[p2]||null)===JSON.stringify(obj))return;if(obj)store.cache[p2]=obj;else delete store.cache[p2];store.fire(p2);return;}
+  if(kind==='picks'&&id&&rel[2]){var dev=rel[2];var shs=store.shards[id]=store.shards[id]||{};
+    if(dev===DEV){var mine=store.myShard(id),st=(obj&&obj.state)||{};Object.keys(st).forEach(function(plu){if(!mine.state[plu]||(mine.state[plu].t||0)<(st[plu].t||0))mine.state[plu]=st[plu];});store.rebuild(id,false);return;}
+    if(obj&&obj.state)shs[dev]=obj;else delete shs[dev];store.rebuild(id,store.ready);return;}
+  if(kind==='presence'&&id){if(obj)store.peers[id]=obj;else delete store.peers[id];paintPeers();}
+};
+store.init=function(){
+  return new Promise(function(res){
+    var settle=null,done=false,fin=function(){if(done)return;done=true;store.ready=true;res();};
+    if(typeof mqtt==='undefined'){fin();return;}
+    var c;try{c=mqtt.connect(BROKER,{clientId:'gpweb_'+DEV+'_'+Math.random().toString(36).slice(2,6),clean:true,keepalive:30,reconnectPeriod:2000,connectTimeout:10000});}catch(e){fin();return;}
+    store.client=c;
+    c.on('connect',function(){store.live=true;setSaveState('ok');c.subscribe(PREFIX+'/#',{qos:0});clearTimeout(settle);settle=setTimeout(fin,1500);store.presence();});
+    c.on('close',function(){store.live=false;setSaveState('ok');});
+    c.on('offline',function(){store.live=false;setSaveState('ok');});
+    c.on('error',function(e){console.warn('mqtt',e);});
+    c.on('message',function(t,payload){var s=payload.toString();if(!done){clearTimeout(settle);settle=setTimeout(fin,700);}store.ingest(t,s);});
+    setTimeout(fin,9000);
+  });
+};
+store.get=function(p){return Promise.resolve(store.cache[p]||null);};
+store.set=function(p,o){
+  var kind=p.split('/')[0],id=p.split('/')[1];
+  if(kind==='progress'){var merged=(store.cache[p]&&store.cache[p].state)||{},entries={};Object.keys(merged).forEach(function(k){if(!(o.state||{})[k])entries[k]={p:0};});Object.keys(o.state||{}).forEach(function(k){entries[k]=o.state[k];});store.writeEntries(id,entries);return Promise.resolve();}
+  store.cache[p]=o;store.fire(p);if(kind==='transfers')store.fireCol('transfers');
+  return store.pub(p,o);
+};
+store.patch=function(p,patch,full){store.writeEntries(p.split('/')[1],patch.state||{});return Promise.resolve();};
+store.del=function(p){
+  var kind=p.split('/')[0],id=p.split('/')[1];
+  if(kind==='progress'){Object.keys(store.shards[id]||{}).forEach(function(dev){store.pub('picks/'+id+'/'+dev,null);});delete store.shards[id];}
+  else store.pub(p,null);
+  delete store.cache[p];store.fire(p);store.fireCol(kind);return Promise.resolve();
+};
+store.sub=function(p,fn){(store.subs[p]=store.subs[p]||[]).push(fn);fn(store.cache[p]||null,{hasPendingWrites:false});
+  return function(){store.subs[p]=(store.subs[p]||[]).filter(function(x){return x!==fn;});};};
+store.subCol=function(col,fn){(store.csubs[col]=store.csubs[col]||[]).push(fn);fn(store.col(col));
+  return function(){store.csubs[col]=(store.csubs[col]||[]).filter(function(x){return x!==fn;});};};
+/* who else is on this transfer right now */
+store.presence=function(){if(!store.client||!store.live)return;var o={name:'Work computer',at:Date.now()};
+  if(typeof T!=='undefined'&&T){o.order=T.order;var got=0,sd=0;T.lines.forEach(function(l){var s=S[l.plu]||{};got+=Math.min(s.p|0,l.req);if(settled(l))sd++;});o.got=got;o.units=units(T);o.lines=T.lines.length;o.settled=sd;}
+  var t=PREFIX+'/presence/'+DEV;store.send(t,JSON.stringify(o));};
+setInterval(function(){store.presence();},30000);
+function paintPeers(){var el=$('peers');if(!el)return;var now=Date.now();var parts=[];Object.keys(store.peers).forEach(function(k){if(k===DEV)return;var p=store.peers[k]||{};var age=Math.max(0,Math.round((now-(p.at||0))/1000));if(age>900)return;var s=(p.name||k)+(p.order?' on #'+p.order+(p.units!=null?' · '+p.got+'/'+p.units:''):'')+' · '+(age<5?'just now':age<60?age+' s ago':Math.round(age/60)+' min ago');parts.push(esc(s));});
+  el.innerHTML=parts.length?'<span class="eyebrow" style="letter-spacing:.06em">'+parts.join(' &nbsp;·&nbsp; ')+'</span>':'';}
+setInterval(paintPeers,10000);
+
+/* ---------- state ---------- */
+var T=null;          // active transfer {order,from,to,date,created,lines[],total}
+var S={};            // progress: plu -> {p,f,n,w,s}
+var Supd=0;          // local updated stamp
+var transfers=[];    // [{id,data}]
+var progressMap={};  // order -> progress doc
+var layout=null;     // {order:[keys]}
+var placements={};   // plu -> key (learned)
+var ui={tab:'pick',q:'',open:{},edit:{},cur:-1,unsubP:null,collapsed:false};
+
+function secOrder(){var o=(layout&&layout.order)||[];var keys=SECTIONS.map(function(s){return s.key;});var out=o.filter(function(k){return SEC[k];});keys.forEach(function(k){if(out.indexOf(k)<0)out.push(k);});return out;}
+function lineSec(l){var s=S[l.plu];return (s&&s.s&&SEC[s.s])?s.s:(SEC[l.sec]?l.sec:'boxed');}
+function st(l){var s=S[l.plu]||{};var p=s.p|0;if(s.f==='skip')return 'skip';if(s.f==='miss'&&p===0)return 'miss';if(p===0)return 'none';if(p<l.req)return 'short';if(p>l.req)return 'over';return 'full';}
+function settled(l){var k=st(l);return k==='full'||k==='over'||k==='skip'||k==='miss';}
+function ensure(plu){return S[plu]=S[plu]||{};}
+function stateWord(l){var s=S[l.plu]||{},p=s.p|0,k=st(l);
+  if(k==='skip')return 'Don’t need';if(k==='miss')return 'Not found';if(k==='none')return 'Need '+l.req;
+  if(k==='short')return p+' of '+l.req;if(k==='over')return p+' picked · '+(p-l.req)+' over';return 'Got '+l.req;}
+
+/* ---------- progress save / sync ---------- */
+/* Each line is written as its own merge patch (progress/<order>.state.<plu>), so two devices
+   picking at once never overwrite each other's lines. Remote snapshots are applied by content,
+   never by clock, so a phone and a work computer with different clocks still agree. */
+var dirty={};
+function normEntry(x){x=x||{};return {p:x.p|0,f:x.f||null,n:x.n||null,w:x.w||null,s:x.s||null};}
+function cleanEntry(x){var n=normEntry(x),o={p:n.p};if(n.f)o.f=n.f;if(n.n)o.n=n.n;if(n.w)o.w=n.w;if(n.s)o.s=n.s;return o;}
+function entryEq(a,b){return JSON.stringify(normEntry(a))===JSON.stringify(normEntry(b));}
+function setSaveState(k){var p=$('syncPill');if(!p)return;var t=p.querySelector('span');
+  if(k==='fail'){p.className='pill local';t.textContent='Save failed, retrying';return;}
+  if(k==='saving'){t.textContent=store.live?'Saving…':'Reconnecting…';p.className='pill '+(store.live?'live':'local');return;}
+  p.className='pill '+(store.live?'live':'local');t.textContent=store.live?'Live sync':'Reconnecting…';}
+var saveProgress=debounce(function(){flushProgress();},250);
+function flushProgress(){
+  if(!T)return;var plus=Object.keys(dirty);if(!plus.length){setSaveState('ok');return;}
+  var now=Date.now(),order=T.order;Supd=now;
+  var patch={order:order,updated:now,by:DEV,state:{}};plus.forEach(function(plu){patch.state[plu]=normEntry(S[plu]);});
+  var full={order:order,updated:now,by:DEV,state:{}};Object.keys(S).forEach(function(plu){full.state[plu]=normEntry(S[plu]);});
+  dirty={};
+  store.patch('progress/'+order,patch,full).then(function(){if(!Object.keys(dirty).length)setSaveState('ok');},function(e){
+    plus.forEach(function(plu){dirty[plu]=1;});setSaveState('fail');console.warn('save failed',e);
+    setTimeout(function(){if(T&&T.order===order)flushProgress();},2000);});
+}
+function touch(plu){if(plu)dirty[plu]=1;setSaveState('saving');saveProgress();}
+function inputFocused(){var a=document.activeElement;return !!(a&&(a.tagName==='TEXTAREA'||a.tagName==='INPUT'));}
+var needRepaint=false;
+function onRemoteProgress(d,meta){
+  if(!T)return;if(d&&d.order&&String(d.order)!==String(T.order))return;
+  if(meta&&meta.hasPendingWrites)return;
+  var rs=(d&&d.state)||{},keys={},changed=[];
+  Object.keys(rs).forEach(function(k){keys[k]=1;});Object.keys(S).forEach(function(k){keys[k]=1;});
+  Object.keys(keys).forEach(function(plu){if(dirty[plu])return;if(entryEq(S[plu],rs[plu]))return;if(rs[plu])S[plu]=cleanEntry(rs[plu]);else delete S[plu];changed.push(plu);});
+  if(!changed.length)return;
+  var a=document.activeElement,typing=inputFocused();var editing=(typing&&a.closest&&a.closest('.item'))?a.closest('.item').dataset.plu:null;
+  if(!typing){paint();}
+  else{needRepaint=true;var panel=$('p-'+ui.tab);changed.forEach(function(plu){if(plu===editing)return;var el=panel.querySelector('.item[data-plu="'+plu+'"]');var l=findLine(plu);if(el&&l){var tmp=document.createElement('div');tmp.innerHTML=itemHTML(l,+el.dataset.i);el.replaceWith(tmp.firstChild);}});paintCounts();}
+  if(d&&d.by==='remote')toast('Synced from the other device');
+}
+document.addEventListener('focusout',function(){setTimeout(function(){if(needRepaint&&!inputFocused()){needRepaint=false;paintPanel();}},50);});
+
+/* ---------- open / close a transfer ---------- */
+function openTransfer(order){
+  var t=transfers.filter(function(x){return x.id===String(order);})[0];
+  if(!t){store.get('transfers/'+order).then(function(d){if(d){transfers.push({id:String(order),data:d});openTransfer(order);}else toast('Transfer not found');});return;}
+  if(ui.unsubP)ui.unsubP();
+  T=t.data;S={};Supd=0;dirty={};needRepaint=false;ui.open={};ui.edit={};ui.cur=-1;ui.q='';
+  try{localStorage.setItem('gwp:active',String(order));}catch(e){}
+  var first=true;
+  ui.unsubP=store.sub('progress/'+T.order,function(d,meta){
+    if(first){first=false;if(d&&d.state){S={};Object.keys(d.state).forEach(function(k){S[k]=cleanEntry(d.state[k]);});Supd=d.updated||0;}paint();return;}
+    onRemoteProgress(d,meta);
+  });
+  setTab('pick');paint();
+}
+
+/* ---------- header / counts ---------- */
+function paintHead(){
+  if(!T){$('hTitle').textContent='Gawler Place Picker';$('hRoute').innerHTML='Internal transfers, storeroom to shop floor. Paste a transfer on the <b>Transfers</b> tab to start.';$('hProg').hidden=true;return;}
+  $('hTitle').textContent='Transfer '+T.order;
+  $('hRoute').innerHTML='<b>'+esc(T.from||'Storeroom')+'</b> → <b>'+esc(T.to||'Adelaide')+'</b> · '+esc(fmtDate(T.date))+' · '+T.lines.length+' lines · '+units(T)+' units';
+  $('hProg').hidden=false;paintCounts();
+}
+function units(t){return t.lines.reduce(function(a,l){return a+l.req;},0);}
+function paintCounts(){
+  if(!T)return;var tu=units(T),got=0,over=0,lines=0,miss=0,wrong=0;
+  T.lines.forEach(function(l){var s=S[l.plu]||{},p=s.p|0,k=st(l);got+=Math.min(p,l.req);over+=Math.max(0,p-l.req);if(settled(l))lines++;if(k==='miss')miss++;if(s.w)wrong++;});
+  $('barFull').style.width=(tu?100*got/tu:0)+'%';$('barOver').style.width=(tu?Math.min(100,100*over/tu):0)+'%';
+  $('cUnits').textContent=got+(over?'+'+over:'');$('cUnitsT').textContent=tu;$('cLines').textContent=lines;$('cLinesT').textContent=T.lines.length;
+  var parts=[];if(miss)parts.push('<b style="color:var(--miss)">'+miss+'</b> not found');if(wrong)parts.push('<b style="color:var(--warn)">'+wrong+'</b> wrong spot');$('cMiss').innerHTML=parts.join(' · ');
+  document.querySelectorAll('.group').forEach(function(g){var k=g.dataset.sec;var ls=T.lines.filter(function(l){return lineSec(l)===k;});var d=ls.filter(settled).length;var c=g.querySelector('.gcount');if(c){c.textContent=d+' / '+ls.length;c.classList.toggle('done',d===ls.length&&ls.length>0);}});
+}
+
+/* ---------- tabs ---------- */
+function setTab(k){ui.tab=k;document.querySelectorAll('.tabs button').forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.tab===k));});
+  ['pick','miss','entry','list','layout'].forEach(function(p){$('p-'+p).classList.toggle('on',p===k);});
+  var f=document.querySelector('footer');f.style.display=(k==='pick'||k==='miss'||k==='entry')&&T?'':'none';
+  paintPanel();}
+document.querySelector('.tabs').addEventListener('click',function(e){var b=e.target.closest('button[data-tab]');if(b)setTab(b.dataset.tab);});
+
+function paint(){paintHead();paintPanel();}
+function paintPanel(){
+  if(ui.tab==='pick')paintPick();else if(ui.tab==='miss')paintMiss();else if(ui.tab==='entry')paintEntry();else if(ui.tab==='list')paintList();else paintLayout();
+}
+
+/* ---------- pick list ---------- */
+function itemHTML(l,i){
+  var s=S[l.plu]||{},k=st(l),p=s.p|0;var edit=ui.edit[l.plu]||'';
+  var tick=k==='full'?'✓':k==='over'?'+'+(p-l.req):k==='miss'?'✕':k==='skip'?'—':k==='short'?p+'/'+l.req:'<span class="box"></span>';
+  var h='<div class="item '+k+(i===ui.cur?' cur':'')+'" data-plu="'+l.plu+'" data-i="'+i+'">';
+  h+='<div class="row"><button class="main" data-act="toggle"><div class="desc"><span class="qtag'+(l.req>1?' many':'')+'">'+l.req+'</span>'+esc(l.desc)+'</div>';
+  h+='<div class="sub"><span class="plu mono">'+esc(l.plu)+'</span><span class="state '+k+'">'+esc(stateWord(l))+'</span>'+(s.w?'<span style="color:var(--warn);font-weight:600">found in '+esc(SEC[s.w]?SEC[s.w].short:s.w)+'</span>':'')+'</div></button>';
+  h+='<button class="tick" data-act="toggle" aria-label="toggle picked">'+tick+'</button></div>';
+  h+='<div class="chips"><button class="chip'+(edit==='qty'?' on':'')+'" data-act="qty">Qty</button>';
+  h+='<button class="chip danger'+(s.f==='miss'?' on':'')+'" data-act="miss">Not found</button>';
+  h+='<button class="chip warn'+(s.w||edit==='where'?' on':'')+'" data-act="where">Wrong spot</button>';
+  h+='<button class="chip'+(s.f==='skip'?' on':'')+'" data-act="skip">Don’t need</button>';
+  h+='<button class="chip'+(edit==='note'||s.n?' on':'')+'" data-act="note">Note</button></div>';
+  if(edit==='qty'){h+='<div class="qty"><div class="qty-main"><button class="step" data-act="dec">−</button><input type="number" inputmode="numeric" min="0" value="'+p+'" data-act="qin"><button class="step" data-act="inc">+</button></div><div class="presets"><button data-act="setq" data-q="0">None</button>'+(l.req>1?'<button data-act="setq" data-q="'+Math.floor(l.req/2)+'">Half</button>':'')+'<button class="key" data-act="setq" data-q="'+l.req+'">All '+l.req+'</button><button data-act="setq" data-q="'+(l.req+1)+'">'+(l.req+1)+'</button></div></div>';}
+  if(edit==='where'){h+='<div class="where"><p>Where did you actually find it? Listed under <b>'+esc(SEC[lineSec(l)].short)+'</b>. Picking a spot remembers it for next time.</p><div class="secgrid">'+secOrder().map(function(k2){return '<button data-act="wsel" data-sec="'+k2+'"'+(s.w===k2?' class="on"':'')+'>'+esc(SEC[k2].short)+'</button>';}).join('')+'<button data-act="wclear">Clear</button></div></div>';}
+  if(edit==='note'){h+='<div class="notebox"><textarea data-act="ntext" placeholder="Note for the summary">'+esc(s.n||'')+'</textarea></div>';}
+  else if(s.n){h+='<div class="noteshow">'+esc(s.n)+'</div>';}
+  return h+'</div>';
+}
+function groupsHTML(lines,opts){
+  opts=opts||{};var order=secOrder(),h='',any=false,idx=0;
+  order.forEach(function(k){
+    var ls=lines.filter(function(l){return lineSec(l)===k;});if(!ls.length)return;any=true;
+    var d=ls.filter(settled).length,closed=ui.collapsed?!(ui.open[k]===true):ui.open[k]===false;
+    h+='<div class="group'+(closed?' closed':'')+'" data-sec="'+k+'"><button class="ghead" data-act="ghead"><span class="chev"></span><span class="gname">'+esc(SEC[k].name)+'</span><span class="gcount'+(d===ls.length?' done':'')+'">'+d+' / '+ls.length+'</span></button>';
+    if(SEC[k].hint&&!opts.noHint)h+='<div class="gnote">'+esc(SEC[k].hint)+'</div>';
+    h+='<div class="glist">'+ls.map(function(l){return itemHTML(l,idx++);}).join('')+'</div></div>';
+  });
+  return any?h:'';
+}
+function paintPick(){
+  var el=$('p-pick');
+  if(!T){el.innerHTML='<p class="lede">No transfer open. Go to <b>Transfers</b> and paste today’s Transfer Details, or drop the Internal Transfer Order PDF.</p><div class="btnrow"><button class="btn pri" data-goto="list">Transfers</button></div>';return;}
+  var q=ui.q.trim().toLowerCase();var lines=T.lines.filter(function(l){return !q||l.desc.toLowerCase().indexOf(q)>=0||l.plu.indexOf(q)>=0||(l.sku||'').toLowerCase().indexOf(q)>=0;});
+  var h='<div class="search"><input id="q" type="search" placeholder="Search item or PLU" value="'+esc(ui.q)+'"><button data-act="qclear">Clear</button></div>';
+  h+=groupsHTML(lines)||'<div class="empty">Nothing matches.</div>';
+  el.innerHTML=h;
+}
+function paintMiss(){
+  var el=$('p-miss');if(!T){el.innerHTML='<div class="empty">No transfer open.</div>';return;}
+  var lines=T.lines.filter(function(l){var k=st(l);return k!=='full'&&k!=='over'&&k!=='skip';});
+  if(!lines.length){el.innerHTML='<div class="empty">Everything is picked or marked. Nice.</div>';return;}
+  var u=lines.reduce(function(a,l){return a+Math.max(0,l.req-((S[l.plu]||{}).p|0));},0);
+  el.innerHTML='<p class="lede"><b>'+lines.length+' lines, '+u+' units</b> still to get. Not-found lines stay here until they are picked or marked don’t need.</p>'+groupsHTML(lines,{noHint:true});
+}
+
+/* item events (delegated) */
+function findLine(plu){return T.lines.filter(function(l){return l.plu===plu;})[0];}
+function inPlace(el,l){var k=st(l),p=(S[l.plu]||{}).p|0;el.className='item '+k+(el.classList.contains('cur')?' cur':'');
+  var tick=k==='full'?'✓':k==='over'?'+'+(p-l.req):k==='miss'?'✕':k==='skip'?'—':k==='short'?p+'/'+l.req:'<span class="box"></span>';
+  el.querySelector('.tick').innerHTML=tick;var sw=el.querySelector('.state');sw.className='state '+k;sw.textContent=stateWord(l);paintCounts();}
+function rerenderItem(plu){var el=$('p-'+ui.tab).querySelector('.item[data-plu="'+plu+'"]')||document.querySelector('.item[data-plu="'+plu+'"]');if(!el)return;var l=findLine(plu);var i=+el.dataset.i;var tmp=document.createElement('div');tmp.innerHTML=itemHTML(l,i);var n=tmp.firstChild;el.replaceWith(n);paintCounts();return n;}
+function handleItemAction(act,el,btn){
+  var plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);
+  if(act==='toggle'){if(st(l)==='full'){s.p=0;}else{s.p=l.req;delete s.f;}touch(plu);rerenderItem(plu);return;}
+  if(act==='qty'){ui.edit[plu]=ui.edit[plu]==='qty'?'':'qty';var n=rerenderItem(plu);var inp=n&&n.querySelector('input[data-act="qin"]');if(inp){inp.focus();inp.select();}return;}
+  if(act==='dec'||act==='inc'){s.p=Math.max(0,(s.p|0)+(act==='inc'?1:-1));if(s.p>0)delete s.f;touch(plu);var inp=el.querySelector('input[data-act="qin"]');if(inp)inp.value=s.p;inPlace(el,l);return;}
+  if(act==='setq'){s.p=+btn.dataset.q;if(s.p>0)delete s.f;touch(plu);ui.edit[plu]='';rerenderItem(plu);return;}
+  if(act==='miss'){if(s.f==='miss'){delete s.f;}else{s.f='miss';s.p=0;}touch(plu);rerenderItem(plu);return;}
+  if(act==='skip'){if(s.f==='skip'){delete s.f;}else{s.f='skip';s.p=0;}touch(plu);rerenderItem(plu);return;}
+  if(act==='where'){ui.edit[plu]=ui.edit[plu]==='where'?'':'where';rerenderItem(plu);return;}
+  if(act==='wsel'){var k=btn.dataset.sec;s.w=k;placements[plu]=k;savePlacements();ui.edit[plu]=s.n?'':'note';touch(plu);var n2=rerenderItem(plu);var ta=n2&&n2.querySelector('textarea');if(ta&&!s.n){ta.placeholder='Where exactly? (shelf, side, top/bottom)';ta.focus();}toast('Remembered: '+SEC[k].short+' for next time');return;}
+  if(act==='wclear'){delete s.w;delete placements[plu];savePlacements();ui.edit[plu]='';touch(plu);rerenderItem(plu);return;}
+  if(act==='note'){ui.edit[plu]=ui.edit[plu]==='note'?'':'note';var n3=rerenderItem(plu);var ta2=n3&&n3.querySelector('textarea');if(ta2)ta2.focus();return;}
+}
+function panelClick(e){
+  var g=e.target.closest('[data-goto]');if(g){setTab(g.dataset.goto);return;}
+  var btn=e.target.closest('[data-act]');if(!btn)return;var act=btn.dataset.act;
+  if(act==='qclear'){ui.q='';paintPick();return;}
+  if(act==='ghead'){var grp=btn.closest('.group');var k=grp.dataset.sec;var closed=grp.classList.toggle('closed');ui.open[k]=!closed;return;}
+  var el=btn.closest('.item');if(el){handleItemAction(act,el,btn);}
+}
+$('p-pick').addEventListener('click',panelClick);$('p-miss').addEventListener('click',panelClick);
+function panelInput(e){
+  var t=e.target;if(t.id==='q'){ui.q=t.value;var pos=t.selectionStart;paintPick();var nq=$('q');nq.focus();try{nq.setSelectionRange(pos,pos);}catch(x){}return;}
+  var el=t.closest('.item');if(!el)return;var plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);
+  if(t.dataset.act==='qin'){var v=parseInt(t.value,10);s.p=isNaN(v)||v<0?0:v;if(s.p>0)delete s.f;touch(plu);inPlace(el,l);}
+  if(t.dataset.act==='ntext'){s.n=t.value;touch(plu);}
+}
+$('p-pick').addEventListener('input',panelInput);$('p-miss').addEventListener('input',panelInput);
+function panelKey(e){if(e.target.dataset&&e.target.dataset.act==='qin'&&e.key==='Enter'){e.preventDefault();var el=e.target.closest('.item');ui.edit[el.dataset.plu]='';rerenderItem(el.dataset.plu);}}
+$('p-pick').addEventListener('keydown',panelKey);$('p-miss').addEventListener('keydown',panelKey);
+
+/* ---------- entry sheet ---------- */
+function entryRows(){return T.lines.slice().sort(function(a,b){return a.plu<b.plu?-1:a.plu>b.plu?1:0;});}
+function paintEntry(){
+  var el=$('p-entry');if(!T){el.innerHTML='<div class="empty">No transfer open.</div>';return;}
+  var rows=entryRows();var ticked=T.entered||{};
+  var h='<p class="lede">Picked column in PLU order, same as the back-office Transfer Details screen. Tap a row when you’ve keyed it.</p><div class="btnrow"><button class="btn pri" data-eact="copytsv">Copy as table (TSV)</button><button class="btn" data-eact="untick">Clear ticks</button></div><div class="entry">';
+  rows.forEach(function(l){var s=S[l.plu]||{},p=s.p|0,k=st(l);var touched=s.p!=null||s.f;h+='<button class="erow'+(ticked[l.plu]?' done':'')+(p===0&&touched?' zero':'')+(!touched?' untouched':'')+'" data-eact="tick" data-plu="'+l.plu+'"><span class="eb">✓</span><span class="en">'+esc(l.desc)+'<br><span class="ep mono">'+esc(l.plu)+' · req '+l.req+'</span></span><span class="eq">'+p+'</span></button>';});
+  el.innerHTML=h+'</div>';
+}
+$('p-entry').addEventListener('click',function(e){var b=e.target.closest('[data-eact]');if(!b||!T)return;var a=b.dataset.eact;
+  if(a==='tick'){T.entered=T.entered||{};var plu=b.dataset.plu;if(T.entered[plu])delete T.entered[plu];else T.entered[plu]=1;b.classList.toggle('done');saveEntered();return;}
+  if(a==='untick'){T.entered={};saveEntered();paintEntry();return;}
+  if(a==='copytsv'){copyText('PLU ID\tItem\tReq\tPicked\n'+entryRows().map(function(l){return l.plu+'\t'+l.desc+'\t'+l.req+'\t'+((S[l.plu]||{}).p|0);}).join('\n'));}
+});
+var saveEntered=debounce(function(){if(T)store.set('transfers/'+T.order,T);},400);
+
+/* ---------- summary ---------- */
+function summaryText(){
+  var full=[],short=[],wrong=[],skip=[];var got=0,tu=units(T),fl=0;
+  T.lines.forEach(function(l){var s=S[l.plu]||{},p=s.p|0,k=st(l);var note=s.n?' - '+s.n.replace(/\s+/g,' '):'';
+    if(k==='full'||k==='over'){fl++;got+=Math.min(p,l.req);full.push(l.plu+'  '+l.desc+'  x'+p+(p>l.req?' (+'+(p-l.req)+' over)':'')+note);}
+    else if(k==='skip'){skip.push(l.plu+'  '+l.desc+'  x'+l.req+note);}
+    else{got+=p;short.push(l.plu+'  '+l.desc+'  '+(k==='miss'?'NOT FOUND (need '+l.req+')':p>0?'short '+p+' of '+l.req:'not picked (need '+l.req+')')+note);}
+    if(s.w)wrong.push(l.plu+'  '+l.desc+'  listed under '+SEC[lineSec(l)].name+' -> found in '+(SEC[s.w]?SEC[s.w].name:s.w)+note);
+  });
+  var out='Transfer '+T.order+' - '+(T.from||'')+' to '+(T.to||'')+' - '+fmtDate(T.date)+'\nPicked in full: '+fl+' of '+T.lines.length+' lines ('+got+' of '+tu+' units)\n';
+  out+='\nPICKED\n'+(full.join('\n')||'(none)')+'\n\nSHORT / NOT FOUND\n'+(short.join('\n')||'(none)')+'\n';
+  if(wrong.length)out+='\nWRONG SPOT - fix the walk order with these\n'+wrong.join('\n')+'\n';
+  if(skip.length)out+='\nDON’T NEED - not transferred on purpose\n'+skip.join('\n')+'\n';
+  return out;
+}
+$('btnCopy').addEventListener('click',function(){if(T)copyText(summaryText());});
+$('btnCollapse').addEventListener('click',function(){ui.collapsed=!ui.collapsed;ui.open={};this.textContent=ui.collapsed?'Expand':'Collapse';paintPanel();});
+$('btnReset').addEventListener('click',function(){if(!T)return;openModal('<p style="margin:0 0 8px;font-weight:600">Reset transfer '+esc(T.order)+'?</p><p style="margin:0 0 10px;font-size:14px;color:var(--muted)">Clears every pick, flag and note on every device. Learned placements are kept.</p><div class="btnrow"><button class="btn pri" id="resetGo">Reset</button><button class="btn" data-close>Cancel</button></div>');$('resetGo').onclick=function(){S={};dirty={};Supd=Date.now();store.set('progress/'+T.order,{order:T.order,updated:Supd,by:DEV,state:{}});closeModal();paint();};});
+
+/* ---------- parsers ---------- */
+function cleanDesc(s){return s.replace(/\s+/g,' ').replace(/\s*-\s*/g,' - ').replace(/\s+/g,' ').trim();}
+function parseBackOffice(txt){
+  var t=txt.replace(/\r/g,'');var hdr={};var m;
+  if((m=/Transfer Number\s*[\t ]*(\d+)/.exec(t)))hdr.order=m[1];
+  if((m=/Date Created\s*[\t ]*(\d{1,2}\/\d{1,2}\/\d{4})/.exec(t)))hdr.date=m[1];
+  if((m=/Outlet From\s*\n?\s*([^\n\t]+)/.exec(t)))hdr.from=m[1].trim();
+  if((m=/Outlet To\s*\n?\s*([^\n\t]+)/.exec(t)))hdr.to=m[1].trim();
+  var blocks=t.split(/\n(?=\s*ID:\s*\d+)/);var lines=[];
+  blocks.forEach(function(b){
+    var mm=/^\s*ID:\s*(\d+)\s*\n\s*SKU:\s*([^\n]*)\n\s*CODE:[^\n]*\n([^\n]+)\n/.exec(b);if(!mm)return;
+    var plu=mm[1],sku=mm[2].trim(),desc=cleanDesc(mm[3]);
+    var rest=b.slice(mm[0].length);var nums=[];var si=rest.indexOf('Season:');
+    if(si>=0){var after=rest.slice(si+7);var nl=after.indexOf('\n');var line0=nl<0?after:after.slice(0,nl);var tail=nl<0?'':after.slice(nl);after=line0.split('\t').slice(1).join('\t')+tail;var cut=after.search(/\$|Edit|Delete|ID:/);if(cut>=0)after=after.slice(0,cut);nums=after.split(/\s+/).filter(function(x){return /^\d+$/.test(x);}).map(Number);}
+    var req=nums.length>1?nums[1]:nums.length?nums[0]:1;var picked=nums.length>3?nums[3]:0;
+    lines.push({plu:plu,sku:sku,desc:desc,req:req,picked:picked});
+  });
+  var tot=null;if((m=/Item\/s\s*\nValue:[^\n]*?\t(\d+)\n\$[\d,.]+\t(\d+)/.exec(t)))tot=+m[2];
+  var cnt=null;if((m=/(\d+)\s+Item\/s/.exec(t)))cnt=+m[1];
+  return {hdr:hdr,lines:lines,total:tot,count:cnt,kind:'back office'};
+}
+function parseSimple(txt){
+  var lines=[],hdr={};txt.replace(/\r/g,'').split('\n').forEach(function(ln){
+    if(!ln.trim())return;var m;
+    if(ln.indexOf('\t')>=0){var c=ln.split('\t').map(function(x){return x.trim();});if(/^\d{4,7}$/.test(c[0])&&c[1]){lines.push({plu:c[0],sku:'',desc:cleanDesc(c[1]),req:parseInt(c[2],10)||1,picked:parseInt(c[3],10)||0});return;}}
+    if((m=/^\s*(\d{4,7})\s+(.+?)\s+(?:x|×)\s*(\d+)\s*$/i.exec(ln))){lines.push({plu:m[1],sku:'',desc:cleanDesc(m[2]),req:+m[3],picked:0});return;}
+    if((m=/^\s*(\d{4,7})\s{2,}(.+?)\s{2,}(\d+)\s*$/.exec(ln))){lines.push({plu:m[1],sku:'',desc:cleanDesc(m[2]),req:+m[3],picked:0});return;}
+    if((m=/^(?:Transfer|#)\s*#?(\d{4,7})/i.exec(ln)))hdr.order=m[1];
+  });
+  return {hdr:hdr,lines:lines,total:null,count:null,kind:'plain list'};
+}
+/* PDF: rebuild layout lines from pdf.js text items, then read ID/SKU blocks */
+var FIX=[['JELLY CUBE SMOOSH OS','JELLY CUBE SMOOSHOS'],['SMOOS HOS','SMOOSHOS'],['DIamond GI D','Diamond GID'],['TcG','TCG']];
+function parsePdfText(pages){
+  var text='';pages.forEach(function(items){
+    var rows=[];items.forEach(function(it){if(!it.str)return;var y=Math.round(it.transform[5]),x=it.transform[4];var r=rows.filter(function(rr){return Math.abs(rr.y-y)<=2;})[0];if(!r){r={y:y,items:[]};rows.push(r);}r.items.push({x:x,w:it.width,s:it.str});});
+    rows.sort(function(a,b){return b.y-a.y;});
+    rows.forEach(function(r){r.items.sort(function(a,b){return a.x-b.x;});var s='',lastEnd=null;r.items.forEach(function(it){if(lastEnd!=null){var gap=it.x-lastEnd;s+=gap>4?'   ':(gap>0.5?' ':'');}s+=it.s;lastEnd=it.x+it.w;});text+=s+'\n';});
+  });
+  var hdr={},m;
+  if((m=/(?:Transfer\s*(?:Order|Number)?\s*#?\s*|#)(\d{5,7})/.exec(text)))hdr.order=m[1];
+  if((m=/(\d{1,2}\/\d{1,2}\/\d{4})/.exec(text)))hdr.date=m[1];
+  if((m=/From:?\s+([A-Za-z ]+?)\s{2,}/.exec(text)))hdr.from=m[1].trim();
+  if((m=/To:?\s+([A-Za-z ]+?)\s{2,}/.exec(text)))hdr.to=m[1].trim();
+  var tot=null;if((m=/Total:?\s+(\d+)/.exec(text)))tot=+m[1];
+  var parts=text.split(/(?=ID:\s*\d{4,7})/);var lines=[];
+  parts.forEach(function(b){
+    var mm=/^ID:\s*(\d{4,7})/.exec(b);if(!mm)return;var plu=mm[1];
+    var sku=(/SKU:\s*(\S+)/.exec(b)||[])[1]||'';
+    var body=b.replace(/^ID:\s*\d+/,'').replace(/SKU:\s*\S+/,'').replace(/Code:\s*\S+/i,'');
+    body=body.replace(/Sent By:[\s\S]*$/,'').replace(/Total:[\s\S]*$/,'');
+    var nm=/((?:\s+\d+){7})\s*$/m.exec(body.split('\n')[0])||/((?:\s+\d+){7})/.exec(body);
+    var req=1;if(nm){var ns=nm[1].trim().split(/\s+/).map(Number);req=ns[1];body=body.replace(nm[1],' ');}
+    body=body.replace(/^\s*\d{8,14}\s+/,'');
+    var frags=body.split('\n').map(function(x){return x.replace(/\s{3,}.*$/,'').trim();}).filter(Boolean);
+    var desc='';frags.forEach(function(f,i){if(!i)desc=f;else desc+=(/^[a-z]/.test(f)?'':' ')+f;});
+    FIX.forEach(function(p){desc=desc.split(p[0]).join(p[1]);});
+    if(desc)lines.push({plu:plu,sku:sku,desc:cleanDesc(desc),req:req,picked:0});
+  });
+  return {hdr:hdr,lines:lines,total:tot,count:null,kind:'PDF'};
+}
+function loadPdfJs(){return new Promise(function(res,rej){if(window.pdfjsLib)return res(window.pdfjsLib);var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=function(){try{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}catch(e){}res(window.pdfjsLib);};s.onerror=function(){rej(new Error('pdf.js could not load (no internet, or blocked). Use the paste box instead.'));};document.head.appendChild(s);});}
+function parsePdfFile(file){return loadPdfJs().then(function(lib){return file.arrayBuffer().then(function(buf){return lib.getDocument({data:buf}).promise;}).then(function(doc){var ps=[];for(var i=1;i<=doc.numPages;i++)ps.push(doc.getPage(i).then(function(pg){return pg.getTextContent();}).then(function(tc){return tc.items;}));return Promise.all(ps);}).then(parsePdfText);});}
+
+/* ---------- import UI ---------- */
+var draft=null,lastPaste='';
+function paintList(){
+  var el=$('p-list');var h='';
+  h+='<h2>New transfer</h2><p class="lede">On the work computer open the transfer, select everything on the <b>Transfer Details</b> page (Ctrl+A, Ctrl+C) and paste it here. A plain list (<span class="mono">PLU  Item  x2</span>) or the TSV from the Entry tab works too.</p>';
+  h+='<textarea class="big" id="pasteBox" placeholder="Paste the Transfer Details page here">'+esc(draft&&!draft.lines.length?lastPaste:'')+'</textarea>';
+  h+='<div class="btnrow"><button class="btn pri" data-lact="parse">Read it</button><label class="btn" for="pdfIn">PDF instead</label></div>';
+  h+='<div class="drop" id="drop">Or drop the Internal Transfer Order PDF here<input id="pdfIn" type="file" accept="application/pdf,.pdf"></div>';
+  if(draft)h+=draftHTML(draft);
+  h+='<h2 style="margin-top:22px">Transfers</h2>';
+  if(!transfers.length)h+='<div class="empty">Nothing saved yet.</div>';
+  else{h+='<div class="tlist">';transfers.slice().sort(function(a,b){return (b.data.created||0)-(a.data.created||0);}).forEach(function(t){var d=t.data,p=progressMap[t.id],st2=(p&&p.state)||{};var tu=units(d),got=0,lines=0;d.lines.forEach(function(l){var s=st2[l.plu]||{},pp=s.p|0;got+=Math.min(pp,l.req);var k=s.f==='skip'||s.f==='miss'?'x':pp>=l.req?'x':'';if(k)lines++;});
+    h+='<div class="trow'+(T&&T.order===d.order?' active':'')+'"><button class="tn" data-lact="open" data-order="'+esc(d.order)+'"><div class="tt">#'+esc(d.order)+'</div><div class="ts">'+esc(fmtDate(d.date))+' · '+d.lines.length+' lines · '+tu+' units · '+esc(d.from||'')+'</div></button><div class="tp'+(lines===d.lines.length?' done':'')+'">'+got+'/'+tu+'<small>'+lines+'/'+d.lines.length+' lines</small></div><button class="btn sm" data-lact="del" data-order="'+esc(d.order)+'" aria-label="delete">✕</button></div>';});h+='</div>';}
+  h+='<p class="lede" style="margin-top:18px;font-size:12.5px">Sync: '+(store.live?'live through this page’s database, so the phone and the work computer see the same picks.':'<b>local to this browser only</b>. Open the published claude.ai link (signed in) on both devices to sync.')+' Keyboard on the Pick tab: <span class="kbd">j</span>/<span class="kbd">k</span> move, <span class="kbd">Enter</span> pick, digits set qty, <span class="kbd">n</span> not found, <span class="kbd">w</span> wrong spot, <span class="kbd">c</span> note, <span class="kbd">/</span> search.</p>';
+  el.innerHTML=h;
+  var dz=$('drop');if(dz){['dragenter','dragover'].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add('over');});});['dragleave','drop'].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.remove('over');});});dz.addEventListener('drop',function(e){var f=e.dataTransfer.files&&e.dataTransfer.files[0];if(f)importPdf(f);});$('pdfIn').addEventListener('change',function(){if(this.files[0])importPdf(this.files[0]);});}
+}
+function draftHTML(d){
+  var h='<div class="card'+(d.lines.length?'':' bad')+'"><h3 style="margin-top:0">'+(d.lines.length?'Read '+d.lines.length+' lines from the '+esc(d.kind):'Could not read any lines')+'</h3>';
+  if(!d.lines.length)return h+'<p style="margin:0;font-size:14px">Paste the whole Transfer Details page, including the <span class="mono">ID:</span> / <span class="mono">SKU:</span> rows.</p></div>';
+  var tu=d.lines.reduce(function(a,l){return a+l.req;},0);
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><label class="eyebrow" style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:110px">Transfer #<input id="dOrder" value="'+esc(d.hdr.order||'')+'" style="padding:7px;border:1px solid var(--line2);border-radius:2px;background:var(--surface);font-family:IBM Plex Mono,monospace;font-size:15px;letter-spacing:0;text-transform:none"></label><label class="eyebrow" style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:110px">Date<input id="dDate" value="'+esc(d.hdr.date||todayAU())+'" style="padding:7px;border:1px solid var(--line2);border-radius:2px;background:var(--surface);font-size:15px;letter-spacing:0;text-transform:none"></label><label class="eyebrow" style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:110px">From<input id="dFrom" value="'+esc(d.hdr.from||'Adelaide Storeroom')+'" style="padding:7px;border:1px solid var(--line2);border-radius:2px;background:var(--surface);font-size:15px;letter-spacing:0;text-transform:none"></label><label class="eyebrow" style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:110px">To<input id="dTo" value="'+esc(d.hdr.to||'Adelaide')+'" style="padding:7px;border:1px solid var(--line2);border-radius:2px;background:var(--surface);font-size:15px;letter-spacing:0;text-transform:none"></label></div>';
+  var warn=[];if(d.total!=null&&d.total!==tu)warn.push('Requested total on the page is '+d.total+' but the lines add up to '+tu+'.');if(d.count!=null&&d.count!==d.lines.length)warn.push('Page says '+d.count+' items, read '+d.lines.length+'.');
+  var seen={},dupes=[];d.lines.forEach(function(l){if(seen[l.plu])dupes.push(l.plu);seen[l.plu]=1;});if(dupes.length)warn.push('Duplicate PLUs: '+dupes.join(', ')+' (only the first is kept).');
+  var pre=d.lines.filter(function(l){return l.picked>0;}).length;if(pre)warn.push(pre+' lines already have a Picked count in the back office; they will be loaded as picked.');
+  if(warn.length)h+='<div class="card warn" style="margin:0 0 8px;padding:8px 10px;font-size:13.5px">'+warn.map(esc).join('<br>')+'</div>';
+  var counts={},guess=0;d.lines.forEach(function(l){var k=classify(l.plu,l.desc,placements);l.sec=k;counts[k]=(counts[k]||0)+1;if(k==='boxed'&&!BAKED[l.plu]&&!placements[l.plu])guess++;});
+  h+='<div class="tscroll"><table class="prev">'+secOrder().filter(function(k){return counts[k];}).map(function(k){return '<tr><td>'+esc(SEC[k].name)+'</td><td>'+counts[k]+'</td></tr>';}).join('')+'<tr><td><b>Total</b></td><td><b>'+d.lines.length+' lines · '+tu+' units</b></td></tr></table></div>';
+  h+='<p style="font-size:12.5px;color:var(--muted);margin:8px 0 0">Anything not recognised lands in Boxed games. Use <b>Wrong spot</b> while picking and it moves next time.</p>';
+  h+='<div class="btnrow"><button class="btn pri" data-lact="save">Save &amp; open</button><button class="btn" data-lact="discard">Discard</button></div></div>';
+  return h;
+}
+function importPdf(f){toast('Reading PDF…');parsePdfFile(f).then(function(d){draft=d;paintList();window.scrollTo(0,0);}).catch(function(e){draft={hdr:{},lines:[],kind:'PDF'};paintList();toast(String(e.message||e));});}
+$('p-list').addEventListener('click',function(e){var b=e.target.closest('[data-lact]');if(!b)return;var a=b.dataset.lact;
+  if(a==='parse'){var txt=$('pasteBox').value;if(!txt.trim()){toast('Paste something first');return;}lastPaste=txt;var d=/ID:\s*\d+/.test(txt)&&/SKU:/.test(txt)?parseBackOffice(txt):parseSimple(txt);draft=d;paintList();return;}
+  if(a==='discard'){draft=null;paintList();return;}
+  if(a==='save'){saveDraft();return;}
+  if(a==='open'){openTransfer(b.dataset.order);return;}
+  if(a==='del'){var o=b.dataset.order;openModal('<p style="margin:0 0 8px;font-weight:600">Delete transfer #'+esc(o)+'?</p><p style="margin:0 0 10px;font-size:14px;color:var(--muted)">Removes the list and its picks everywhere.</p><div class="btnrow"><button class="btn pri" id="delGo">Delete</button><button class="btn" data-close>Cancel</button></div>');$('delGo').onclick=function(){store.del('transfers/'+o);store.del('progress/'+o);transfers=transfers.filter(function(t){return t.id!==o;});if(T&&T.order===o){if(ui.unsubP)ui.unsubP();T=null;S={};}closeModal();paint();};return;}
+});
+function saveDraft(){
+  var order=($('dOrder').value||'').trim().replace(/[^0-9A-Za-z_-]/g,'');if(!order){toast('Transfer number needed');$('dOrder').focus();return;}
+  var seen={},lines=[];draft.lines.forEach(function(l){if(seen[l.plu])return;seen[l.plu]=1;lines.push({plu:l.plu,sku:l.sku||'',desc:l.desc,req:l.req|0||1,sec:classify(l.plu,l.desc,placements)});});
+  var t={order:order,date:$('dDate').value.trim(),from:$('dFrom').value.trim(),to:$('dTo').value.trim(),created:Date.now(),lines:lines,total:draft.total,entered:{}};
+  var pre={};draft.lines.forEach(function(l){if(l.picked>0)pre[l.plu]={p:l.picked};});
+  var go=function(){store.set('transfers/'+order,t).then(function(){
+    var ex=transfers.filter(function(x){return x.id===order;})[0];if(ex)ex.data=t;else transfers.push({id:order,data:t});
+    if(Object.keys(pre).length){store.set('progress/'+order,{order:order,updated:Date.now(),by:DEV,state:pre});}
+    draft=null;openTransfer(order);toast('Saved #'+order);});};
+  var ex=transfers.filter(function(x){return x.id===order;})[0];
+  if(ex){openModal('<p style="margin:0 0 8px;font-weight:600">#'+esc(order)+' already exists.</p><p style="margin:0 0 10px;font-size:14px;color:var(--muted)">Replace its item list? Picks already made are kept for matching PLUs.</p><div class="btnrow"><button class="btn pri" id="repGo">Replace</button><button class="btn" data-close>Cancel</button></div>');$('repGo').onclick=function(){closeModal();go();};}
+  else go();
+}
+
+/* ---------- layout tab ---------- */
+function paintLayout(){
+  var el=$('p-layout'),order=secOrder();
+  var h='<h2>Walk order</h2><p class="lede">The order the sections appear in on the Pick tab. Move them to match the real route through the shop. Saved for every transfer.</p>';
+  order.forEach(function(k,i){h+='<div class="orow"><span class="on">'+(i+1)+'. '+esc(SEC[k].name)+'<span class="oh">'+esc(SEC[k].hint)+'</span></span><button data-yact="up" data-k="'+k+'" aria-label="up"'+(i===0?' disabled':'')+'>↑</button><button data-yact="down" data-k="'+k+'" aria-label="down"'+(i===order.length-1?' disabled':'')+'>↓</button></div>';});
+  h+='<div class="btnrow"><button class="btn" data-yact="resetorder">Default order</button></div>';
+  var pl=Object.keys(placements);
+  h+='<h2 style="margin-top:22px">Learned placements</h2><p class="lede">Every Wrong spot answer lands here and is used the next time that PLU turns up on a transfer.</p>';
+  if(!pl.length)h+='<div class="empty">Nothing learned yet.</div>';
+  else{h+='<div class="entry">';pl.sort().forEach(function(p){var d=null;transfers.forEach(function(t){t.data.lines.forEach(function(l){if(l.plu===p)d=l.desc;});});h+='<div class="prow"><span class="mono" style="font-weight:700">'+esc(p)+'</span><span class="pd">'+esc(d||'')+'</span><span class="cond" style="font-weight:600">'+esc(SEC[placements[p]]?SEC[placements[p]].short:placements[p])+'</span><button class="btn sm" data-yact="forget" data-p="'+esc(p)+'">✕</button></div>';});h+='</div>';}
+  h+='<h2 style="margin-top:22px">Fixed placements</h2><p class="lede">Settled in past transfers: '+Object.keys(BAKED).map(function(p){return p+' → '+SEC[BAKED[p]].short;}).join(', ')+'. A learned placement overrides these.</p>';
+  el.innerHTML=h;
+}
+$('p-layout').addEventListener('click',function(e){var b=e.target.closest('[data-yact]');if(!b)return;var a=b.dataset.yact,o=secOrder();
+  if(a==='up'||a==='down'){var i=o.indexOf(b.dataset.k),j=a==='up'?i-1:i+1;if(j<0||j>=o.length)return;var tmp=o[i];o[i]=o[j];o[j]=tmp;layout={order:o};store.set('settings/layout',layout);paintLayout();return;}
+  if(a==='resetorder'){layout={order:SECTIONS.map(function(s){return s.key;})};store.set('settings/layout',layout);paintLayout();return;}
+  if(a==='forget'){delete placements[b.dataset.p];savePlacements();paintLayout();}
+});
+function savePlacements(){store.set('settings/placements',{map:placements,updated:Date.now()});}
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown',function(e){
+  if(!T||ui.tab!=='pick')return;var a=document.activeElement;var typing=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA');
+  if(e.key==='Escape'&&typing){a.blur();return;}
+  if(typing)return;
+  if(e.key==='/'){e.preventDefault();var q=$('q');if(q){q.focus();q.select();}return;}
+  var items=Array.prototype.slice.call(document.querySelectorAll('#p-pick .item'));if(!items.length)return;
+  var move=function(d){ui.cur=Math.max(0,Math.min(items.length-1,(ui.cur<0?(d>0?-1:items.length):ui.cur)+d));items.forEach(function(x,i){x.classList.toggle('cur',i===ui.cur);});items[ui.cur].scrollIntoView({block:'center'});};
+  if(e.key==='j'||e.key==='ArrowDown'){e.preventDefault();move(1);return;}
+  if(e.key==='k'||e.key==='ArrowUp'){e.preventDefault();move(-1);return;}
+  if(ui.cur<0||!items[ui.cur])return;var el=items[ui.cur],plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);
+  if(e.key==='Enter'){e.preventDefault();handleItemAction('toggle',el);}
+  else if(/^[0-9]$/.test(e.key)){s.p=+e.key;if(s.p>0)delete s.f;touch(plu);rerenderItem(plu);}
+  else if(e.key==='+'||e.key==='='){s.p=(s.p|0)+1;delete s.f;touch(plu);rerenderItem(plu);}
+  else if(e.key==='-'){s.p=Math.max(0,(s.p|0)-1);touch(plu);rerenderItem(plu);}
+  else if(e.key==='n'){handleItemAction('miss',el);}
+  else if(e.key==='w'){handleItemAction('where',el);}
+  else if(e.key==='c'){handleItemAction('note',el);}
+  else if(e.key==='d'){handleItemAction('skip',el);}
+  else return;
+  items=Array.prototype.slice.call(document.querySelectorAll('#p-pick .item'));items.forEach(function(x,i){x.classList.toggle('cur',i===ui.cur);});
+});
+
+/* ---------- boot ---------- */
+function setPill(){setSaveState('ok');}
+paintHead();setTab('pick');
+store.init().then(function(){
+  setPill();
+  store.sub('settings/layout',function(d){layout=d||null;if(ui.tab==='layout')paintLayout();else if(T&&ui.tab==='pick')paintPick();});
+  store.sub('settings/placements',function(d){placements=(d&&d.map)||{};if(ui.tab==='layout')paintLayout();});
+  var firstList=true;
+  store.subCol('transfers',function(rows){transfers=rows.filter(function(r){return r.data&&r.data.lines;});
+    if(T){var mine=transfers.filter(function(x){return x.id===T.order;})[0];if(mine&&mine.data!==T&&(mine.data.created||0)>=(T.created||0)){var keep=T.entered;T=mine.data;if(!T.entered&&keep)T.entered=keep;paintHead();}}
+    if(firstList){firstList=false;var act=null;try{act=localStorage.getItem('gwp:active');}catch(e){}var hash=(location.hash||'').replace('#','');if(hash&&transfers.some(function(x){return x.id===hash;}))act=hash;
+      if(act&&transfers.some(function(x){return x.id===act;}))openTransfer(act);else if(transfers.length){var newest=transfers.slice().sort(function(a,b){return (b.data.created||0)-(a.data.created||0);})[0];openTransfer(newest.id);}else{setTab('list');}
+    } else if(ui.tab==='list')paintList();
+  });
+  store.subCol('progress',function(rows){progressMap={};rows.forEach(function(r){progressMap[r.id]=r.data;});if(ui.tab==='list')paintList();});
+});
+})();
+</script>
