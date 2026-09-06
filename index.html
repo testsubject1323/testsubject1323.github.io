@@ -235,7 +235,9 @@ footer{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--ground
 <footer>
   <div class="foot-in">
     <button class="pri" id="btnCopy">Copy summary</button>
-    <button id="btnCollapse">Collapse</button>
+    <button id="btnUndo" disabled title="Undo the last pick change">Undo</button>
+    <button id="btnCollapse" title="Minimise all sections">Min all</button>
+    <button id="btnExpand" title="Open all sections">Open all</button>
     <button id="btnReset">Reset</button>
   </div>
 </footer>
@@ -260,6 +262,7 @@ var SECTIONS=[
  {key:'fidget',name:'Fidgets & keychains',         short:'Fidget',  hint:'Bottom of shelf 6 and the counter. Speks, clickers, Micro Fidgetz, Tangle.'},
  {key:'white', name:'White shelf (misc)',          short:'White',   hint:'Shelf 7. World’s Smallest, playing cards, fake eggs, novelty.'},
  {key:'kits',  name:'Wooden kits',                 short:'Kits',    hint:'Shelf 8 back, with the wooden guns. Rolife, ROKR, Robotime, Wood Bloom.'},
+ {key:'huzzle',name:'Huzzles & cast puzzles',      short:'Huzzle',  hint:'Their own spot just above the EUGY and Nanoblock table. Hanayama cast puzzles and Huzzle boxes.'},
  {key:'nano',  name:'Nanoblock & EUGY',            short:'Nano',    hint:'Under the folding table, right side.'},
  {key:'boxed', name:'Boxed games',                 short:'Boxed',   hint:'Shelves 1–3, big to small. Onto the trolley, heaviest at the bottom.'},
  {key:'chess', name:'Premium chess & mahjong',     short:'Chess',   hint:'Shelf 9.'},
@@ -269,13 +272,15 @@ var SEC={}; SECTIONS.forEach(function(s){SEC[s.key]=s;});
 /* placements settled in past transfers (Will's corrections) */
 var BAKED={
  '174241':'boxed','173309':'boxed','176253':'fidget','174232':'bulk','171532':'cards',
- '141733':'tcg','141741':'tcg','125355':'bulk','124715':'cards','129200':'chess'
+ '141733':'tcg','141741':'tcg','125355':'bulk','124715':'cards','129200':'chess',
+ '174949':'kits','125384':'huzzle','161697':'huzzle','171970':'nano','176626':'nano'
 };
 var RULES=[
  [/nanoblock|nano ?block|mininano|\beugy/i,'nano'],
  [/robotime|rolife|\brokr\b|wood bloom|book nook|diy .*(kit|house|shop)|3d wooden|wooden gun/i,'kits'],
  [/booster|magic the gathering|\bmtg\b|pokemon|pokémon|lorcana|one piece|riftbound|match attax|footy stars|topps|commander deck|flesh and blood|sleeves|gamegenic|vallejo.*18 ?ml|18 ?ml.*vallejo|game colou?r|ak interactive|playmarker|mega evolutions|starter deck|\btcg\b|\btc g\b/i,'tcg'],
- [/aerosol|400 ?ml|jigsaw|\b\d{3,4} ?pc\b|puzzle mat|puzzle holder|huzzle|cast puzzle|shuffler|vizzles|roll ?up/i,'bulk'],
+ [/huzzle|cast puzzle|hanayama/i,'huzzle'],
+ [/aerosol|400 ?ml|jigsaw|\b\d{3,4} ?pc\b|puzzle mat|puzzle holder|shuffler|vizzles|roll ?up/i,'bulk'],
  [/smoosho|squish|super sqz|super squeeze|\bgid\b|glow in the dark|putty|needoh|nee ?doh|pullie|stretch|flinger|plush|sticky|squeeze|dumpling|jelly|soft rise|slime|mochi|glitter/i,'squish'],
  [/fidget|\bspeks?\b|spek-|clicker|spin cube|spinner|tangle|keychain|keyring|stress relief|pop ?it|infinity cube|magnet/i,'fidget'],
  [/worlds? smallest|playing cards|fake egg|cap gun|cap bomb|hair chalk|finger puppet|yo ?yo|harmonica|bottle opener|keycraft|blind bag|pen lab|clementoni|\bmdi\b|novelty|prank|whoopee/i,'white'],
@@ -287,6 +292,13 @@ var RULES=[
  [/party|you can'?t say|poorly explained|that sound game|cards against|what do you meme|codenames|just one|wavelength|hues (&|and) cues|herd mentality|tapple|monkey around|drunk|adult|stupid deaths|exploding kittens|throw throw|5 minute|drinking|nsfw|psycho killer|nightmare st/i,'party'],
  [/card game|hangsell|\bcoup\b|quiddler|tenzi|flip 7|\buno\b|monopoly deal|skip-?bo|phase 10|bananagrams|rummy|the game\b|the crew|saboteur|taco cat|regicide|dutch blitz|cockroach|\bgreed\b|moose master|twisted cryptids|sushi go|love letter|dobble|spot it|\btin\b|bento|snakes of wrath|forgenesis|dutch|\bset\b.*card|\bcards\b/i,'cards']
 ];
+/* TCG booster packs come out as a whole sealed box, whatever the transfer asks for. */
+function boxSize(desc){var d=desc.toLowerCase();if(d.indexOf('booster')<0&&d.indexOf('match attax')<0)return null;
+  if(/\bbox\b|display|bundle|\bcase\b|\bdeck\b|\btin\b|collection|blister|jumpstart|prerelease|starter/.test(d))return null;
+  if(d.indexOf('collector booster')>=0)return 12;if(/pokemon|pokémon/.test(d))return 36;if(d.indexOf('lorcana')>=0)return 24;
+  if(/one piece|yu-?gi-?oh|riftbound|flesh and blood|match attax|lord of the rings|middle ?-? ?earth|star wars unlimited|dragon ball|union arena|gundam/.test(d))return 24;
+  if(d.indexOf('magic')>=0||d.indexOf('mtg')>=0)return /duskmourn|bloomburrow|outlaws|karlov|lost caverns|eldraine|march of the machine|foundations/.test(d)?36:30;
+  return null;}
 function classify(plu,desc,learned){
   if(learned&&learned[plu]&&SEC[learned[plu]])return learned[plu];
   if(BAKED[plu])return BAKED[plu];
@@ -404,18 +416,24 @@ var ui={tab:'pick',q:'',open:{},edit:{},cur:-1,unsubP:null,collapsed:false};
 
 function secOrder(){var o=(layout&&layout.order)||[];var keys=SECTIONS.map(function(s){return s.key;});var out=o.filter(function(k){return SEC[k];});keys.forEach(function(k){if(out.indexOf(k)<0)out.push(k);});return out;}
 function lineSec(l){var s=S[l.plu];return (s&&s.s&&SEC[s.s])?s.s:(SEC[l.sec]?l.sec:'boxed');}
-function st(l){var s=S[l.plu]||{};var p=s.p|0;if(s.f==='skip')return 'skip';if(s.f==='miss'&&p===0)return 'miss';if(p===0)return 'none';if(p<l.req)return 'short';if(p>l.req)return 'over';return 'full';}
+function st(l){var s=S[l.plu]||{};var p=s.p|0;if(s.f==='skip')return 'skip';if(s.f==='miss'&&p===0)return 'miss';if(p===0)return 'none';var b=boxSize(l.desc);if(b&&p===b)return 'full';if(p<l.req)return 'short';if(p>l.req)return 'over';return 'full';}
 function settled(l){var k=st(l);return k==='full'||k==='over'||k==='skip'||k==='miss';}
 function ensure(plu){return S[plu]=S[plu]||{};}
 function stateWord(l){var s=S[l.plu]||{},p=s.p|0,k=st(l);
   if(k==='skip')return 'Don’t need';if(k==='miss')return 'Not found';if(k==='none')return 'Need '+l.req;
-  if(k==='short')return p+' of '+l.req;if(k==='over')return p+' picked · '+(p-l.req)+' over';return 'Got '+l.req;}
+  if(k==='short')return p+' of '+l.req;if(k==='over')return p+' picked · '+(p-l.req)+' over';var b=boxSize(l.desc);return (b&&p===b&&p!==l.req)?'Full box of '+p:'Got '+l.req;}
 
 /* ---------- progress save / sync ---------- */
 /* Each line is written as its own merge patch (progress/<order>.state.<plu>), so two devices
    picking at once never overwrite each other's lines. Remote snapshots are applied by content,
    never by clock, so a phone and a work computer with different clocks still agree. */
 var dirty={};
+/* undo: one snapshot per line edit */
+var undoStack=[];
+function snap(plu){var s=S[plu];return s?JSON.stringify(s):null;}
+function commitUndo(plu,before){var after=snap(plu);if(before===after)return;undoStack.push({plu:plu,before:before});if(undoStack.length>60)undoStack.shift();paintUndo();}
+function paintUndo(){var b=$('btnUndo');if(b)b.disabled=!undoStack.length;}
+function undoLast(){var u=undoStack.pop();if(!u||!T)return;if(u.before)S[u.plu]=JSON.parse(u.before);else delete S[u.plu];touch(u.plu);rerenderItem(u.plu);paintUndo();toast('Undone');}
 function normEntry(x){x=x||{};return {p:x.p|0,f:x.f||null,n:x.n||null,w:x.w||null,s:x.s||null};}
 function cleanEntry(x){var n=normEntry(x),o={p:n.p};if(n.f)o.f=n.f;if(n.n)o.n=n.n;if(n.w)o.w=n.w;if(n.s)o.s=n.s;return o;}
 function entryEq(a,b){return JSON.stringify(normEntry(a))===JSON.stringify(normEntry(b));}
@@ -501,15 +519,15 @@ function itemHTML(l,i){
   var tick=k==='full'?'✓':k==='over'?'+'+(p-l.req):k==='miss'?'✕':k==='skip'?'—':k==='short'?p+'/'+l.req:'<span class="box"></span>';
   var h='<div class="item '+k+(i===ui.cur?' cur':'')+'" data-plu="'+l.plu+'" data-i="'+i+'">';
   h+='<div class="row"><button class="main" data-act="toggle"><div class="desc"><span class="qtag'+(l.req>1?' many':'')+'">'+l.req+'</span>'+esc(l.desc)+'</div>';
-  h+='<div class="sub"><span class="plu mono">'+esc(l.plu)+'</span><span class="state '+k+'">'+esc(stateWord(l))+'</span>'+(s.w?'<span style="color:var(--warn);font-weight:600">found in '+esc(SEC[s.w]?SEC[s.w].short:s.w)+'</span>':'')+'</div></button>';
+  h+='<div class="sub"><span class="plu mono">'+esc(l.plu)+'</span><span class="state '+k+'">'+esc(stateWord(l))+'</span>'+(s.w?'<span style="color:var(--warn);font-weight:600">found in '+esc(SEC[s.w]?SEC[s.w].short:(s.w==='other'?'Other':s.w))+'</span>':'')+'</div></button>';
   h+='<button class="tick" data-act="toggle" aria-label="toggle picked">'+tick+'</button></div>';
   h+='<div class="chips"><button class="chip'+(edit==='qty'?' on':'')+'" data-act="qty">Qty</button>';
   h+='<button class="chip danger'+(s.f==='miss'?' on':'')+'" data-act="miss">Not found</button>';
   h+='<button class="chip warn'+(s.w||edit==='where'?' on':'')+'" data-act="where">Wrong spot</button>';
   h+='<button class="chip'+(s.f==='skip'?' on':'')+'" data-act="skip">Don’t need</button>';
   h+='<button class="chip'+(edit==='note'||s.n?' on':'')+'" data-act="note">Note</button></div>';
-  if(edit==='qty'){h+='<div class="qty"><div class="qty-main"><button class="step" data-act="dec">−</button><input type="number" inputmode="numeric" min="0" value="'+p+'" data-act="qin"><button class="step" data-act="inc">+</button></div><div class="presets"><button data-act="setq" data-q="0">None</button>'+(l.req>1?'<button data-act="setq" data-q="'+Math.floor(l.req/2)+'">Half</button>':'')+'<button class="key" data-act="setq" data-q="'+l.req+'">All '+l.req+'</button><button data-act="setq" data-q="'+(l.req+1)+'">'+(l.req+1)+'</button></div></div>';}
-  if(edit==='where'){h+='<div class="where"><p>Where did you actually find it? Listed under <b>'+esc(SEC[lineSec(l)].short)+'</b>. Picking a spot remembers it for next time.</p><div class="secgrid">'+secOrder().map(function(k2){return '<button data-act="wsel" data-sec="'+k2+'"'+(s.w===k2?' class="on"':'')+'>'+esc(SEC[k2].short)+'</button>';}).join('')+'<button data-act="wclear">Clear</button></div></div>';}
+  if(edit==='qty'){h+='<div class="qty"><div class="qty-main"><button class="step" data-act="dec">−</button><input type="number" inputmode="numeric" min="0" value="'+p+'" data-act="qin"><button class="step" data-act="inc">+</button></div><div class="presets"><button data-act="setq" data-q="0">None</button>'+(boxSize(l.desc)?'<button data-act="setq" data-q="'+l.req+'">All '+l.req+'</button><button class="key" data-act="setq" data-q="'+boxSize(l.desc)+'">Box '+boxSize(l.desc)+'</button><button data-act="setq" data-q="'+(boxSize(l.desc)*2)+'">'+(boxSize(l.desc)*2)+'</button>':(l.req>1?'<button data-act="setq" data-q="'+Math.floor(l.req/2)+'">Half</button>':'')+'<button class="key" data-act="setq" data-q="'+l.req+'">All '+l.req+'</button><button data-act="setq" data-q="'+(l.req+1)+'">'+(l.req+1)+'</button>')+'</div></div>';}
+  if(edit==='where'){h+='<div class="where"><p>Where did you actually find it? Listed under <b>'+esc(SEC[lineSec(l)].short)+'</b>. Picking a spot remembers it for next time.</p><div class="secgrid">'+secOrder().map(function(k2){return '<button data-act="wsel" data-sec="'+k2+'"'+(s.w===k2?' class="on"':'')+'>'+esc(SEC[k2].short)+'</button>';}).join('')+'<button data-act="wsel" data-sec="other"'+(s.w==='other'?' class="on"':'')+'>Other</button><button data-act="wclear">Clear</button></div></div>';}
   if(edit==='note'){h+='<div class="notebox"><textarea data-act="ntext" placeholder="Note for the summary">'+esc(s.n||'')+'</textarea></div>';}
   else if(s.n){h+='<div class="noteshow">'+esc(s.n)+'</div>';}
   return h+'</div>';
@@ -548,15 +566,16 @@ function inPlace(el,l){var k=st(l),p=(S[l.plu]||{}).p|0;el.className='item '+k+(
   el.querySelector('.tick').innerHTML=tick;var sw=el.querySelector('.state');sw.className='state '+k;sw.textContent=stateWord(l);paintCounts();}
 function rerenderItem(plu){var el=$('p-'+ui.tab).querySelector('.item[data-plu="'+plu+'"]')||document.querySelector('.item[data-plu="'+plu+'"]');if(!el)return;var l=findLine(plu);var i=+el.dataset.i;var tmp=document.createElement('div');tmp.innerHTML=itemHTML(l,i);var n=tmp.firstChild;el.replaceWith(n);paintCounts();return n;}
 function handleItemAction(act,el,btn){
-  var plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);
-  if(act==='toggle'){if(st(l)==='full'){s.p=0;}else{s.p=l.req;delete s.f;}touch(plu);rerenderItem(plu);return;}
+  var plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);var before=snap(plu);try{return handleItemAction_(act,el,btn,plu,l,s);}finally{commitUndo(plu,before);}}
+function handleItemAction_(act,el,btn,plu,l,s){
+  if(act==='toggle'){if(st(l)==='full'){s.p=0;}else{s.p=boxSize(l.desc)||l.req;delete s.f;}touch(plu);rerenderItem(plu);return;}
   if(act==='qty'){ui.edit[plu]=ui.edit[plu]==='qty'?'':'qty';var n=rerenderItem(plu);var inp=n&&n.querySelector('input[data-act="qin"]');if(inp){inp.focus();inp.select();}return;}
   if(act==='dec'||act==='inc'){s.p=Math.max(0,(s.p|0)+(act==='inc'?1:-1));if(s.p>0)delete s.f;touch(plu);var inp=el.querySelector('input[data-act="qin"]');if(inp)inp.value=s.p;inPlace(el,l);return;}
   if(act==='setq'){s.p=+btn.dataset.q;if(s.p>0)delete s.f;touch(plu);ui.edit[plu]='';rerenderItem(plu);return;}
   if(act==='miss'){if(s.f==='miss'){delete s.f;}else{s.f='miss';s.p=0;}touch(plu);rerenderItem(plu);return;}
   if(act==='skip'){if(s.f==='skip'){delete s.f;}else{s.f='skip';s.p=0;}touch(plu);rerenderItem(plu);return;}
   if(act==='where'){ui.edit[plu]=ui.edit[plu]==='where'?'':'where';rerenderItem(plu);return;}
-  if(act==='wsel'){var k=btn.dataset.sec;s.w=k;placements[plu]=k;savePlacements();ui.edit[plu]=s.n?'':'note';touch(plu);var n2=rerenderItem(plu);var ta=n2&&n2.querySelector('textarea');if(ta&&!s.n){ta.placeholder='Where exactly? (shelf, side, top/bottom)';ta.focus();}toast('Remembered: '+SEC[k].short+' for next time');return;}
+  if(act==='wsel'){var k=btn.dataset.sec;s.w=k;if(SEC[k]){placements[plu]=k;}else{delete placements[plu];}savePlacements();ui.edit[plu]=s.n?'':'note';touch(plu);var n2=rerenderItem(plu);var ta=n2&&n2.querySelector('textarea');if(ta&&!s.n){ta.placeholder=k==='other'?'Where is it? (somewhere not on the list)':'Where exactly? (shelf, side, top/bottom)';ta.focus();}if(SEC[k])toast('Remembered: '+SEC[k].short+' for next time');return;}
   if(act==='wclear'){delete s.w;delete placements[plu];savePlacements();ui.edit[plu]='';touch(plu);rerenderItem(plu);return;}
   if(act==='note'){ui.edit[plu]=ui.edit[plu]==='note'?'':'note';var n3=rerenderItem(plu);var ta2=n3&&n3.querySelector('textarea');if(ta2)ta2.focus();return;}
 }
@@ -570,7 +589,7 @@ function panelClick(e){
 $('p-pick').addEventListener('click',panelClick);$('p-miss').addEventListener('click',panelClick);
 function panelInput(e){
   var t=e.target;if(t.id==='q'){ui.q=t.value;var pos=t.selectionStart;paintPick();var nq=$('q');nq.focus();try{nq.setSelectionRange(pos,pos);}catch(x){}return;}
-  var el=t.closest('.item');if(!el)return;var plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);
+  var el=t.closest('.item');if(!el)return;var plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);var before=snap(plu);setTimeout(function(){commitUndo(plu,before);},0);
   if(t.dataset.act==='qin'){var v=parseInt(t.value,10);s.p=isNaN(v)||v<0?0:v;if(s.p>0)delete s.f;touch(plu);inPlace(el,l);}
   if(t.dataset.act==='ntext'){s.n=t.value;touch(plu);}
 }
@@ -598,7 +617,7 @@ var saveEntered=debounce(function(){if(T)store.set('transfers/'+T.order,T);},400
 function summaryText(){
   var full=[],short=[],wrong=[],skip=[];var got=0,tu=units(T),fl=0;
   T.lines.forEach(function(l){var s=S[l.plu]||{},p=s.p|0,k=st(l);var note=s.n?' - '+s.n.replace(/\s+/g,' '):'';
-    if(k==='full'||k==='over'){fl++;got+=Math.min(p,l.req);full.push(l.plu+'  '+l.desc+'  x'+p+(p>l.req?' (+'+(p-l.req)+' over)':'')+note);}
+    if(k==='full'||k==='over'){fl++;got+=Math.min(p,l.req);var bx=boxSize(l.desc)===p&&p!==l.req;full.push(l.plu+'  '+l.desc+'  x'+p+(bx?' (full box)':(p>l.req?' (+'+(p-l.req)+' over)':''))+note);}
     else if(k==='skip'){skip.push(l.plu+'  '+l.desc+'  x'+l.req+note);}
     else{got+=p;short.push(l.plu+'  '+l.desc+'  '+(k==='miss'?'NOT FOUND (need '+l.req+')':p>0?'short '+p+' of '+l.req:'not picked (need '+l.req+')')+note);}
     if(s.w)wrong.push(l.plu+'  '+l.desc+'  listed under '+SEC[lineSec(l)].name+' -> found in '+(SEC[s.w]?SEC[s.w].name:s.w)+note);
@@ -610,7 +629,10 @@ function summaryText(){
   return out;
 }
 $('btnCopy').addEventListener('click',function(){if(T)copyText(summaryText());});
-$('btnCollapse').addEventListener('click',function(){ui.collapsed=!ui.collapsed;ui.open={};this.textContent=ui.collapsed?'Expand':'Collapse';paintPanel();});
+$('btnCollapse').addEventListener('click',function(){ui.collapsed=true;ui.open={};paintPanel();});
+$('btnExpand').addEventListener('click',function(){ui.collapsed=false;ui.open={};paintPanel();});
+$('btnUndo').addEventListener('click',undoLast);
+document.addEventListener('keydown',function(e){if((e.metaKey||e.ctrlKey)&&e.key==='z'&&!/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||'')){e.preventDefault();undoLast();}});
 $('btnReset').addEventListener('click',function(){if(!T)return;openModal('<p style="margin:0 0 8px;font-weight:600">Reset transfer '+esc(T.order)+'?</p><p style="margin:0 0 10px;font-size:14px;color:var(--muted)">Clears every pick, flag and note on every device. Learned placements are kept.</p><div class="btnrow"><button class="btn pri" id="resetGo">Reset</button><button class="btn" data-close>Cancel</button></div>');$('resetGo').onclick=function(){S={};dirty={};Supd=Date.now();store.set('progress/'+T.order,{order:T.order,updated:Supd,by:DEV,state:{}});closeModal();paint();};});
 
 /* ---------- parsers ---------- */
@@ -763,9 +785,9 @@ document.addEventListener('keydown',function(e){
   if(e.key==='k'||e.key==='ArrowUp'){e.preventDefault();move(-1);return;}
   if(ui.cur<0||!items[ui.cur])return;var el=items[ui.cur],plu=el.dataset.plu,l=findLine(plu),s=ensure(plu);
   if(e.key==='Enter'){e.preventDefault();handleItemAction('toggle',el);}
-  else if(/^[0-9]$/.test(e.key)){s.p=+e.key;if(s.p>0)delete s.f;touch(plu);rerenderItem(plu);}
-  else if(e.key==='+'||e.key==='='){s.p=(s.p|0)+1;delete s.f;touch(plu);rerenderItem(plu);}
-  else if(e.key==='-'){s.p=Math.max(0,(s.p|0)-1);touch(plu);rerenderItem(plu);}
+  else if(/^[0-9]$/.test(e.key)){var b0=snap(plu);s.p=+e.key;if(s.p>0)delete s.f;touch(plu);rerenderItem(plu);commitUndo(plu,b0);}
+  else if(e.key==='+'||e.key==='='){var b1=snap(plu);s.p=(s.p|0)+1;delete s.f;touch(plu);rerenderItem(plu);commitUndo(plu,b1);}
+  else if(e.key==='-'){var b2=snap(plu);s.p=Math.max(0,(s.p|0)-1);touch(plu);rerenderItem(plu);commitUndo(plu,b2);}
   else if(e.key==='n'){handleItemAction('miss',el);}
   else if(e.key==='w'){handleItemAction('where',el);}
   else if(e.key==='c'){handleItemAction('note',el);}
