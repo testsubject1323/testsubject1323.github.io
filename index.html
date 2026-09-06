@@ -294,8 +294,8 @@ var RULES=[
 ];
 /* TCG booster packs come out as a whole sealed box, whatever the transfer asks for. */
 function boxSize(desc){var d=desc.toLowerCase();if(d.indexOf('booster')<0&&d.indexOf('match attax')<0)return null;
-  if(/\bbox\b|display|bundle|\bcase\b|\bdeck\b|\btin\b|collection|blister|jumpstart|prerelease|starter/.test(d))return null;
-  if(d.indexOf('collector booster')>=0)return 12;if(/pokemon|pokémon/.test(d))return 36;if(d.indexOf('lorcana')>=0)return 24;
+  if(/\bbox\b|display|bundle|\bcase\b|\bdeck\b|\btin\b|collection|blister|prerelease|starter/.test(d))return null;
+  if(d.indexOf('jumpstart')>=0)return 18;if(d.indexOf('collector booster')>=0)return 12;if(/pokemon|pokémon/.test(d))return 36;if(d.indexOf('lorcana')>=0)return 24;
   if(/one piece|yu-?gi-?oh|riftbound|flesh and blood|match attax|lord of the rings|middle ?-? ?earth|star wars unlimited|dragon ball|union arena|gundam/.test(d))return 24;
   if(d.indexOf('magic')>=0||d.indexOf('mtg')>=0)return /duskmourn|bloomburrow|outlaws|karlov|lost caverns|eldraine|march of the machine|foundations/.test(d)?36:30;
   return null;}
