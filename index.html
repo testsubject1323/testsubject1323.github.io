@@ -415,7 +415,7 @@ var placements={};   // plu -> key (learned)
 var ui={tab:'pick',q:'',open:{},edit:{},cur:-1,unsubP:null,collapsed:false};
 
 function secOrder(){var o=(layout&&layout.order)||[];var keys=SECTIONS.map(function(s){return s.key;});var out=o.filter(function(k){return SEC[k];});keys.forEach(function(k){if(out.indexOf(k)<0)out.push(k);});return out;}
-function lineSec(l){var s=S[l.plu];return (s&&s.s&&SEC[s.s])?s.s:(SEC[l.sec]?l.sec:'boxed');}
+function lineSec(l){var s=S[l.plu];if(s&&s.s&&SEC[s.s])return s.s;if(placements[l.plu]&&SEC[placements[l.plu]])return placements[l.plu];if(BAKED[l.plu])return BAKED[l.plu];return SEC[l.sec]?l.sec:'boxed';}
 function st(l){var s=S[l.plu]||{};var p=s.p|0;if(s.f==='skip')return 'skip';if(s.f==='miss'&&p===0)return 'miss';if(p===0)return 'none';var b=boxSize(l.desc);if(b&&p===b)return 'full';if(p<l.req)return 'short';if(p>l.req)return 'over';return 'full';}
 function settled(l){var k=st(l);return k==='full'||k==='over'||k==='skip'||k==='miss';}
 function ensure(plu){return S[plu]=S[plu]||{};}
@@ -802,7 +802,7 @@ paintHead();setTab('pick');
 store.init().then(function(){
   setPill();
   store.sub('settings/layout',function(d){layout=d||null;if(ui.tab==='layout')paintLayout();else if(T&&ui.tab==='pick')paintPick();});
-  store.sub('settings/placements',function(d){placements=(d&&d.map)||{};if(ui.tab==='layout')paintLayout();});
+  store.sub('settings/placements',function(d){placements=(d&&d.map)||{};if(ui.tab==='layout')paintLayout();else if(T)paintPanel();});
   var firstList=true;
   store.subCol('transfers',function(rows){transfers=rows.filter(function(r){return r.data&&r.data.lines;});
     if(T){var mine=transfers.filter(function(x){return x.id===T.order;})[0];if(mine&&mine.data!==T&&(mine.data.created||0)>=(T.created||0)){var keep=T.entered;T=mine.data;if(!T.entered&&keep)T.entered=keep;paintHead();}}
